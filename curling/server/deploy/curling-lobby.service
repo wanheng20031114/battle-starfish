@@ -1,0 +1,28 @@
+[Unit]
+Description=Battle Starfish Curling Test Lobby
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=curlingtest
+Group=curlingtest
+WorkingDirectory=/opt/battle-starfish-curling
+EnvironmentFile=/etc/battle-starfish-curling.env
+ExecStart=/opt/battle-starfish-curling/venv/bin/python -m uvicorn lobby_api.main:app --host ${CURLING_BIND_HOST} --port ${CURLING_BIND_PORT}
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=12
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/battle-starfish-curling
+LimitNOFILE=8192
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

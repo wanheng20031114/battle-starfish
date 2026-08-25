@@ -1,0 +1,106 @@
+[gd_resource type="Theme" load_steps=8 format=3]
+
+[sub_resource type="StyleBoxFlat" id="Panel_dark"]
+bg_color = Color(0.047, 0.106, 0.157, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.27, 0.53, 0.60, 0.30)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 18.0
+content_margin_top = 14.0
+content_margin_right = 18.0
+content_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxFlat" id="Button_normal"]
+bg_color = Color(0.082, 0.176, 0.239, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Button_hover"]
+bg_color = Color(0.118, 0.29, 0.349, 1)
+border_width_bottom = 2
+border_color = Color(0.388, 0.839, 0.812, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="Button_pressed"]
+bg_color = Color(0.212, 0.568, 0.556, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Field"]
+bg_color = Color(0.035, 0.086, 0.129, 0.92)
+border_width_bottom = 1
+border_color = Color(0.36, 0.63, 0.68, 0.5)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="Progress_bg"]
+bg_color = Color(0.035, 0.086, 0.129, 0.95)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="Progress_fill"]
+bg_color = Color(0.388, 0.839, 0.812, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[resource]
+default_font_size = 16
+Button/colors/font_color = Color(0.91, 0.96, 0.97, 1)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/colors/font_pressed_color = Color(0.03, 0.09, 0.12, 1)
+Button/font_sizes/font_size = 15
+Button/styles/normal = SubResource("Button_normal")
+Button/styles/hover = SubResource("Button_hover")
+Button/styles/pressed = SubResource("Button_pressed")
+Button/styles/focus = SubResource("Button_hover")
+Panel/styles/panel = SubResource("Panel_dark")
+LineEdit/colors/font_color = Color(0.91, 0.96, 0.97, 1)
+LineEdit/colors/font_placeholder_color = Color(0.52, 0.67, 0.71, 1)
+LineEdit/styles/normal = SubResource("Field")
+LineEdit/styles/focus = SubResource("Field")
+OptionButton/styles/normal = SubResource("Button_normal")
+OptionButton/styles/hover = SubResource("Button_hover")
+OptionButton/styles/pressed = SubResource("Button_pressed")
+ItemList/colors/font_color = Color(0.85, 0.93, 0.94, 1)
+ItemList/colors/font_selected_color = Color(0.02, 0.08, 0.10, 1)
+ItemList/colors/guide_color = Color(0.3, 0.55, 0.6, 0.25)
+ItemList/styles/panel = SubResource("Field")
+RichTextLabel/colors/default_color = Color(0.82, 0.91, 0.92, 1)
+ProgressBar/styles/background = SubResource("Progress_bg")
+ProgressBar/styles/fill = SubResource("Progress_fill")
+

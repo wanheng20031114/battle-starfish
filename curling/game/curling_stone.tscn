@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://curling/game/curling_stone.gd" id="1_stone"]
+
+[sub_resource type="CircleShape2D" id="CircleShape_stone"]
+radius = 14.55
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_stone"]
+friction = 0.0
+bounce = 0.46
+
+[node name="CurlingStone" type="RigidBody2D"]
+visible = false
+mass = 19.0
+physics_material_override = SubResource("PhysicsMaterial_stone")
+gravity_scale = 0.0
+linear_damp_mode = 1
+linear_damp = 0.0
+angular_damp_mode = 1
+angular_damp = 0.0346574
+continuous_cd = 2
+contact_monitor = true
+max_contacts_reported = 16
+freeze = true
+script = ExtResource("1_stone")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape_stone")

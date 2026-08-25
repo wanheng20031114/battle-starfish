@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://curling/tests/native_physics_test.gd" id="1_test"]
+[ext_resource type="PackedScene" path="res://curling/game/curling_stone.tscn" id="2_stone"]
+
+[node name="NativePhysicsTest" type="Node2D"]
+script = ExtResource("1_test")
+
+[node name="StoneA" parent="." instance=ExtResource("2_stone")]
+stone_id = 0
+
+[node name="StoneB" parent="." instance=ExtResource("2_stone")]
+stone_id = 1
+
+[node name="StoneC" parent="." instance=ExtResource("2_stone")]
+stone_id = 2
+
+[node name="StoneD" parent="." instance=ExtResource("2_stone")]
+stone_id = 3
+

@@ -1,0 +1,22 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://curling/tests/native_calibration_test.gd" id="1_test"]
+[ext_resource type="PackedScene" path="res://curling/game/curling_stone.tscn" id="2_stone"]
+[ext_resource type="Script" path="res://curling/game/heat_grid.gd" id="3_heat"]
+[ext_resource type="Script" path="res://curling/tests/full_heat_grid.gd" id="4_full"]
+
+[node name="NativeCalibrationTest" type="Node2D"]
+script = ExtResource("1_test")
+
+[node name="ColdHeatGrid" type="Node2D" parent="."]
+script = ExtResource("3_heat")
+
+[node name="FullHeatGrid" type="Node2D" parent="."]
+script = ExtResource("4_full")
+
+[node name="ColdStone" parent="." instance=ExtResource("2_stone")]
+stone_id = 0
+
+[node name="SweptStone" parent="." instance=ExtResource("2_stone")]
+stone_id = 1
+

@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://curling/tests/capture_preview.gd" id="1_capture"]
+[ext_resource type="PackedScene" path="res://curling/curling.tscn" id="2_curling"]
+
+[node name="CapturePreview" type="Node"]
+script = ExtResource("1_capture")
+
+[node name="Curling" parent="." instance=ExtResource("2_curling")]
+

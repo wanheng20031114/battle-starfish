@@ -1,0 +1,97 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://curling/game/match_controller.gd" id="1_match"]
+[ext_resource type="PackedScene" path="res://curling/game/curling_sheet.tscn" id="2_sheet"]
+[ext_resource type="Script" path="res://curling/game/heat_grid.gd" id="3_heat"]
+[ext_resource type="PackedScene" path="res://curling/game/curling_stone.tscn" id="4_stone"]
+
+[node name="MatchController" type="Node2D"]
+script = ExtResource("1_match")
+
+[node name="Sheet" parent="." instance=ExtResource("2_sheet")]
+
+[node name="HeatGrid" type="Node2D" parent="."]
+script = ExtResource("3_heat")
+
+[node name="Trajectory" type="Line2D" parent="."]
+z_index = 6
+width = 4.0
+default_color = Color(0.91, 0.35, 0.38, 0.82)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+antialiased = true
+
+[node name="Stones" type="Node2D" parent="."]
+z_index = 5
+
+[node name="Stone00" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 0
+team = 1
+
+[node name="Stone01" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 1
+team = 1
+
+[node name="Stone02" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 2
+team = 1
+
+[node name="Stone03" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 3
+team = 1
+
+[node name="Stone04" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 4
+team = 1
+
+[node name="Stone05" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 5
+team = 1
+
+[node name="Stone06" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 6
+team = 1
+
+[node name="Stone07" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 7
+team = 1
+
+[node name="Stone08" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 8
+team = 2
+
+[node name="Stone09" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 9
+team = 2
+
+[node name="Stone10" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 10
+team = 2
+
+[node name="Stone11" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 11
+team = 2
+
+[node name="Stone12" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 12
+team = 2
+
+[node name="Stone13" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 13
+team = 2
+
+[node name="Stone14" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 14
+team = 2
+
+[node name="Stone15" parent="Stones" instance=ExtResource("4_stone")]
+stone_id = 15
+team = 2
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(0, 0)
+zoom = Vector2(0.245, 0.245)
+position_smoothing_enabled = false
+enabled = false
+

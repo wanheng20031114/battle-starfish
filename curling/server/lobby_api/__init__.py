@@ -1,0 +1,2 @@
+"""Curling test lobby service."""
+

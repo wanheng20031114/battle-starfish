@@ -1,0 +1,713 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://curling/curling.gd" id="1_app"]
+[ext_resource type="Theme" path="res://curling/ui/curling_theme.tres" id="2_theme"]
+[ext_resource type="Script" path="res://curling/network/curling_net.gd" id="3_net"]
+[ext_resource type="Script" path="res://curling/network/relay_endpoint.gd" id="4_relay"]
+[ext_resource type="Script" path="res://curling/network/lan_discovery.gd" id="5_lan"]
+[ext_resource type="Script" path="res://curling/network/public_lobby_client.gd" id="6_public"]
+[ext_resource type="Script" path="res://curling/audio/curling_audio.gd" id="7_audio"]
+[ext_resource type="PackedScene" path="res://curling/game/match_controller.tscn" id="8_match"]
+[ext_resource type="Script" path="res://curling/ui/minimap.gd" id="9_minimap"]
+[ext_resource type="PackedScene" path="res://curling/ui/remote_cursor.tscn" id="10_cursor"]
+
+[sub_resource type="StyleBoxFlat" id="Top_bar"]
+bg_color = Color(0.031, 0.078, 0.118, 0.94)
+border_width_bottom = 1
+border_color = Color(0.31, 0.62, 0.67, 0.42)
+corner_radius_bottom_left = 8
+corner_radius_bottom_right = 8
+
+[node name="Curling" type="Node"]
+script = ExtResource("1_app")
+
+[node name="CurlingNet" type="Node" parent="."]
+script = ExtResource("3_net")
+
+[node name="RelayEndpoint" type="Node" parent="CurlingNet"]
+script = ExtResource("4_relay")
+
+[node name="LanDiscovery" type="Node" parent="."]
+script = ExtResource("5_lan")
+
+[node name="PublicLobbyClient" type="Node" parent="."]
+script = ExtResource("6_public")
+
+[node name="HTTPRequest" type="HTTPRequest" parent="PublicLobbyClient"]
+use_threads = true
+timeout = 10.0
+
+[node name="CurlingAudio" type="Node" parent="."]
+script = ExtResource("7_audio")
+
+[node name="Ui" type="AudioStreamPlayer" parent="CurlingAudio"]
+volume_db = -9.0
+
+[node name="Impact" type="AudioStreamPlayer" parent="CurlingAudio"]
+volume_db = -5.0
+max_polyphony = 4
+
+[node name="Sweep" type="AudioStreamPlayer" parent="CurlingAudio"]
+volume_db = -12.0
+
+[node name="MatchController" parent="." instance=ExtResource("8_match")]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="LobbyScreen" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+
+[node name="Backdrop" type="ColorRect" parent="UI/LobbyScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.064, 0.098, 1)
+mouse_filter = 2
+
+[node name="IceBand" type="ColorRect" parent="UI/LobbyScreen"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 458.0
+offset_bottom = 568.0
+grow_horizontal = 2
+color = Color(0.73, 0.91, 0.92, 0.08)
+mouse_filter = 2
+
+[node name="Layout" type="HBoxContainer" parent="UI/LobbyScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 64.0
+offset_top = 48.0
+offset_right = -64.0
+offset_bottom = -48.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 70
+
+[node name="Left" type="VBoxContainer" parent="UI/LobbyScreen/Layout"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="Eyebrow" type="Label" parent="UI/LobbyScreen/Layout/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 14
+text = "BATTLE STARFISH · LARGE NETWORK TEST"
+
+[node name="Title" type="Label" parent="UI/LobbyScreen/Layout/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.98, 0.98, 1)
+theme_override_font_sizes/font_size = 54
+text = "CURLING\nLAB"
+
+[node name="Rule" type="HSeparator" parent="UI/LobbyScreen/Layout/Left"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+
+[node name="Subtitle" type="Label" parent="UI/LobbyScreen/Layout/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.69, 0.82, 0.84, 1)
+theme_override_font_sizes/font_size = 20
+text = "二至八人的原生物理冰壶实验"
+
+[node name="Body" type="Label" parent="UI/LobbyScreen/Layout/Left"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.48, 0.64, 0.68, 1)
+theme_override_font_sizes/font_size = 15
+text = "投壶、碰撞、curl与多人擦冰都在同一条权威冰道上发生。\n代码独立于Battle Starfish主玩法。"
+autowrap_mode = 2
+
+[node name="Footnote" type="Label" parent="UI/LobbyScreen/Layout/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.37, 0.54, 0.58, 1)
+theme_override_font_sizes/font_size = 13
+text = "MOUSE + KEYBOARD  /  GODOT 4.6  /  WINDOWS"
+
+[node name="Right" type="VBoxContainer" parent="UI/LobbyScreen/Layout"]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 9
+
+[node name="Section" type="Label" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.94, 0.95, 1)
+theme_override_font_sizes/font_size = 22
+text = "开始测试"
+
+[node name="Nickname" type="LineEdit" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+placeholder_text = "昵称（2–16字符）"
+max_length = 16
+
+[node name="Ends" type="OptionButton" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+
+[node name="Demo" type="Button" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+text = "单机演示 · 8人模拟"
+
+[node name="NetworkActions" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HostLan" type="Button" parent="UI/LobbyScreen/Layout/Right/NetworkActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "创建LAN房"
+
+[node name="CreatePublic" type="Button" parent="UI/LobbyScreen/Layout/Right/NetworkActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "创建公网房"
+
+[node name="AddressRow" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Address" type="LineEdit" parent="UI/LobbyScreen/Layout/Right/AddressRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "LAN Host IP"
+text = "127.0.0.1"
+
+[node name="JoinLan" type="Button" parent="UI/LobbyScreen/Layout/Right/AddressRow"]
+layout_mode = 2
+text = "加入LAN"
+
+[node name="CodeRow" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoomCode" type="LineEdit" parent="UI/LobbyScreen/Layout/Right/CodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "6位公网房间码"
+max_length = 6
+
+[node name="JoinCode" type="Button" parent="UI/LobbyScreen/Layout/Right/CodeRow"]
+layout_mode = 2
+text = "加入代码房"
+
+[node name="PublicActions" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Refresh" type="Button" parent="UI/LobbyScreen/Layout/Right/PublicActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "刷新公网房间"
+
+[node name="Quick" type="Button" parent="UI/LobbyScreen/Layout/Right/PublicActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "快速匹配"
+
+[node name="Resume" type="Button" parent="UI/LobbyScreen/Layout/Right/PublicActions"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+text = "恢复上局"
+
+[node name="PublicRooms" type="ItemList" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+size_flags_vertical = 3
+allow_reselect = true
+
+[node name="Warning" type="Label" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.66, 0.42, 1)
+theme_override_font_sizes/font_size = 12
+text = "TEST SERVER · http://47.123.6.127:8010 · HTTP与ENet内容未加密"
+
+[node name="Status" type="Label" parent="UI/LobbyScreen/Layout/Right"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.76, 0.77, 1)
+text = "正在读取房间列表…"
+
+[node name="RoomScreen" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+
+[node name="Backdrop" type="ColorRect" parent="UI/RoomScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.064, 0.098, 1)
+
+[node name="Layout" type="VBoxContainer" parent="UI/RoomScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 80.0
+offset_top = 56.0
+offset_right = -80.0
+offset_bottom = -56.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 18
+
+[node name="Header" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
+layout_mode = 2
+
+[node name="RoomTitle" type="Label" parent="UI/RoomScreen/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 28
+text = "房间"
+
+[node name="Hint" type="Label" parent="UI/RoomScreen/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.7, 0.73, 1)
+text = "选择队伍并准备"
+
+[node name="Teams" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 28
+
+[node name="RedTeam" type="VBoxContainer" parent="UI/RoomScreen/Layout/Teams"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="UI/RoomScreen/Layout/Teams/RedTeam"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.35, 0.38, 1)
+theme_override_font_sizes/font_size = 26
+text = "RED / 红队"
+
+[node name="RedRoster" type="Label" parent="UI/RoomScreen/Layout/Teams/RedTeam"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 20
+text = "等待队员"
+
+[node name="BlueTeam" type="VBoxContainer" parent="UI/RoomScreen/Layout/Teams"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="UI/RoomScreen/Layout/Teams/BlueTeam"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.29, 0.53, 0.85, 1)
+theme_override_font_sizes/font_size = 26
+text = "BLUE / 蓝队"
+
+[node name="BlueRoster" type="Label" parent="UI/RoomScreen/Layout/Teams/BlueTeam"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 20
+text = "等待队员"
+
+[node name="HostAssign" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="UI/RoomScreen/Layout/HostAssign"]
+layout_mode = 2
+text = "HOST 调队"
+
+[node name="Player" type="OptionButton" parent="UI/RoomScreen/Layout/HostAssign"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ToRed" type="Button" parent="UI/RoomScreen/Layout/HostAssign"]
+layout_mode = 2
+text = "调入红队"
+
+[node name="ToBlue" type="Button" parent="UI/RoomScreen/Layout/HostAssign"]
+layout_mode = 2
+text = "调入蓝队"
+
+[node name="RoomStatus" type="Label" parent="UI/RoomScreen/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.76, 0.77, 1)
+text = "等待玩家"
+
+[node name="Actions" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Red" type="Button" parent="UI/RoomScreen/Layout/Actions"]
+layout_mode = 2
+text = "加入红队"
+
+[node name="Blue" type="Button" parent="UI/RoomScreen/Layout/Actions"]
+layout_mode = 2
+text = "加入蓝队"
+
+[node name="Ready" type="Button" parent="UI/RoomScreen/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "准备"
+
+[node name="Start" type="Button" parent="UI/RoomScreen/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "开始战术阶段"
+
+[node name="Leave" type="Button" parent="UI/RoomScreen/Layout/Actions"]
+layout_mode = 2
+text = "离开房间"
+
+[node name="TacticsScreen" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+
+[node name="Dim" type="ColorRect" parent="UI/TacticsScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.04, 0.06, 0.56)
+mouse_filter = 2
+
+[node name="Panel" type="Panel" parent="UI/TacticsScreen"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -310.0
+offset_top = -284.0
+offset_right = 310.0
+offset_bottom = 284.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="UI/TacticsScreen/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 22.0
+offset_right = -24.0
+offset_bottom = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="UI/TacticsScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "投壶安排"
+
+[node name="Timer" type="Label" parent="UI/TacticsScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 18
+text = "120 秒"
+
+[node name="Hint" type="Label" parent="UI/TacticsScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.72, 0.75, 1)
+text = "点击空位认领，再次点击释放。不能覆盖队友。"
+
+[node name="Slots" type="ItemList" parent="UI/TacticsScreen/Panel/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+allow_reselect = true
+
+[node name="Confirm" type="Button" parent="UI/TacticsScreen/Panel/Layout"]
+layout_mode = 2
+text = "确认本队安排"
+
+[node name="MatchHUD" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="TopBackdrop" type="Panel" parent="UI/MatchHUD"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 18.0
+offset_top = 14.0
+offset_right = -318.0
+offset_bottom = 66.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("Top_bar")
+mouse_filter = 2
+
+[node name="TopBar" type="HBoxContainer" parent="UI/MatchHUD"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 38.0
+offset_top = 22.0
+offset_right = -338.0
+offset_bottom = 58.0
+grow_horizontal = 2
+theme_override_constants/separation = 22
+mouse_filter = 2
+
+[node name="Score" type="Label" parent="UI/MatchHUD/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 21
+text = "红 0  —  0 蓝"
+
+[node name="End" type="Label" parent="UI/MatchHUD/TopBar"]
+layout_mode = 2
+text = "END 1 / 1"
+
+[node name="Timer" type="Label" parent="UI/MatchHUD/TopBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 22
+text = "60"
+
+[node name="RightRail" type="Panel" parent="UI/MatchHUD"]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -292.0
+offset_top = 14.0
+offset_right = -14.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Layout" type="VBoxContainer" parent="UI/MatchHUD/RightRail"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Active" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "瞄准\n玩家"
+
+[node name="Teams" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.74, 0.77, 1)
+text = "后手：红队\n本手：蓝队\n已投：0 / 16"
+
+[node name="Minimap" type="Control" parent="UI/MatchHUD/RightRail/Layout"]
+custom_minimum_size = Vector2(0, 92)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_minimap")
+
+[node name="ChatLabel" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+text = "通信"
+
+[node name="ChatHistory" type="RichTextLabel" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+scroll_following = true
+
+[node name="ChatRow" type="HBoxContainer" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Channel" type="OptionButton" parent="UI/MatchHUD/RightRail/Layout/ChatRow"]
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+
+[node name="Input" type="LineEdit" parent="UI/MatchHUD/RightRail/Layout/ChatRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Enter发送"
+max_length = 200
+
+[node name="BottomBackdrop" type="Panel" parent="UI/MatchHUD"]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = -72.0
+offset_right = -318.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("Top_bar")
+mouse_filter = 2
+
+[node name="BottomBar" type="HBoxContainer" parent="UI/MatchHUD"]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 36.0
+offset_top = -62.0
+offset_right = -336.0
+offset_bottom = -22.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 12
+mouse_filter = 2
+
+[node name="Instruction" type="Label" parent="UI/MatchHUD/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "从壶向后拖拽"
+
+[node name="Power" type="ProgressBar" parent="UI/MatchHUD/BottomBar"]
+custom_minimum_size = Vector2(170, 20)
+layout_mode = 2
+max_value = 100.0
+show_percentage = false
+
+[node name="Spin" type="Label" parent="UI/MatchHUD/BottomBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(110, 0)
+text = "旋转 +0.00"
+
+[node name="ResultScreen" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+
+[node name="Dim" type="ColorRect" parent="UI/ResultScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.04, 0.06, 0.68)
+
+[node name="Panel" type="Panel" parent="UI/ResultScreen"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -160.0
+offset_right = 280.0
+offset_bottom = 160.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="UI/ResultScreen/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 28.0
+offset_top = 24.0
+offset_right = -28.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 18
+
+[node name="Eyebrow" type="Label" parent="UI/ResultScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+text = "FINAL RESULT"
+horizontal_alignment = 1
+
+[node name="Title" type="Label" parent="UI/ResultScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "红队获胜"
+horizontal_alignment = 1
+
+[node name="Score" type="Label" parent="UI/ResultScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "红队 0 — 0 蓝队"
+horizontal_alignment = 1
+
+[node name="BackToRoom" type="Button" parent="UI/ResultScreen/Panel/Layout"]
+layout_mode = 2
+text = "返回原房间"
+
+[node name="Diagnostics" type="Label" parent="UI"]
+visible = false
+offset_left = 20.0
+offset_top = 82.0
+offset_right = 420.0
+offset_bottom = 210.0
+theme_override_colors/font_color = Color(0.48, 0.95, 0.81, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 13
+text = "CURLING DIAGNOSTICS"
+mouse_filter = 2
+
+[node name="CursorLayer" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Cursor0" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+[node name="Cursor1" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+[node name="Cursor2" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+[node name="Cursor3" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+[node name="Cursor4" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+[node name="Cursor5" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+[node name="Cursor6" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]

@@ -1,0 +1,24 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://curling/ui/remote_cursor.gd" id="1_cursor"]
+
+[node name="RemoteCursor" type="Control"]
+layout_mode = 0
+offset_right = 1.0
+offset_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("1_cursor")
+
+[node name="Name" type="Label" parent="."]
+layout_mode = 0
+offset_left = 18.0
+offset_top = 15.0
+offset_right = 138.0
+offset_bottom = 39.0
+mouse_filter = 2
+theme_override_colors/font_shadow_color = Color(0.02, 0.06, 0.1, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 13
+text = "玩家"
+

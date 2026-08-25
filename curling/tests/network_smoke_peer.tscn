@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://curling/tests/network_smoke_peer.gd" id="1_smoke"]
+[ext_resource type="Script" path="res://curling/network/curling_net.gd" id="2_net"]
+[ext_resource type="Script" path="res://curling/network/relay_endpoint.gd" id="3_endpoint"]
+
+[node name="NetworkSmokePeer" type="Node"]
+script = ExtResource("1_smoke")
+
+[node name="CurlingNet" type="Node" parent="."]
+script = ExtResource("2_net")
+
+[node name="RelayEndpoint" type="Node" parent="CurlingNet"]
+script = ExtResource("3_endpoint")
+
