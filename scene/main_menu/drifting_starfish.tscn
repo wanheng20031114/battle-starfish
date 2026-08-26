@@ -1,0 +1,77 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scene/main_menu/drifting_starfish.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/main_menu/selected/drifting_starfish_8frame.png" id="2_atlas"]
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_01"]
+atlas = ExtResource("2_atlas")
+region = Rect2(0, 0, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_02"]
+atlas = ExtResource("2_atlas")
+region = Rect2(955, 0, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_03"]
+atlas = ExtResource("2_atlas")
+region = Rect2(1910, 0, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_04"]
+atlas = ExtResource("2_atlas")
+region = Rect2(2865, 0, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_05"]
+atlas = ExtResource("2_atlas")
+region = Rect2(0, 786, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_06"]
+atlas = ExtResource("2_atlas")
+region = Rect2(955, 786, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_07"]
+atlas = ExtResource("2_atlas")
+region = Rect2(1910, 786, 955, 786)
+
+[sub_resource type="AtlasTexture" id="Atlas_frame_08"]
+atlas = ExtResource("2_atlas")
+region = Rect2(2865, 786, 955, 786)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_wiggle"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_01")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_02")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_03")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_04")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_05")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_06")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_07")
+}, {
+"duration": 1.0,
+"texture": SubResource("Atlas_frame_08")
+}],
+"loop": true,
+"name": &"wiggle",
+"speed": 5.555556
+}]
+
+[node name="DriftingStarfish" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Sprite" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_wiggle")
+animation = &"wiggle"
+autoplay = "wiggle"
