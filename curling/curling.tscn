@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://curling/curling.gd" id="1_app"]
 [ext_resource type="Theme" path="res://curling/ui/curling_theme.tres" id="2_theme"]
@@ -10,6 +10,8 @@
 [ext_resource type="PackedScene" path="res://curling/game/match_controller.tscn" id="8_match"]
 [ext_resource type="Script" path="res://curling/ui/minimap.gd" id="9_minimap"]
 [ext_resource type="PackedScene" path="res://curling/ui/remote_cursor.tscn" id="10_cursor"]
+[ext_resource type="Script" path="res://curling/settings/curling_settings.gd" id="11_settings"]
+[ext_resource type="PackedScene" path="res://curling/settings/curling_settings_panel.tscn" id="12_settings_panel"]
 
 [sub_resource type="StyleBoxFlat" id="Top_bar"]
 bg_color = Color(0.031, 0.078, 0.118, 0.94)
@@ -37,17 +39,23 @@ script = ExtResource("6_public")
 use_threads = true
 timeout = 10.0
 
+[node name="CurlingSettings" type="Node" parent="."]
+script = ExtResource("11_settings")
+
 [node name="CurlingAudio" type="Node" parent="."]
 script = ExtResource("7_audio")
 
 [node name="Ui" type="AudioStreamPlayer" parent="CurlingAudio"]
+bus = &"SFX"
 volume_db = -9.0
 
 [node name="Impact" type="AudioStreamPlayer" parent="CurlingAudio"]
+bus = &"SFX"
 volume_db = -5.0
 max_polyphony = 4
 
 [node name="Sweep" type="AudioStreamPlayer" parent="CurlingAudio"]
+bus = &"SFX"
 volume_db = -12.0
 
 [node name="MatchController" parent="." instance=ExtResource("8_match")]
@@ -224,6 +232,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "恢复上局"
 
+[node name="Settings" type="Button" parent="UI/LobbyScreen/Layout/Right/PublicActions"]
+layout_mode = 2
+text = "设置"
+
 [node name="PublicRooms" type="ItemList" parent="UI/LobbyScreen/Layout/Right"]
 custom_minimum_size = Vector2(0, 112)
 layout_mode = 2
@@ -377,6 +389,10 @@ text = "开始战术阶段"
 [node name="Leave" type="Button" parent="UI/RoomScreen/Layout/Actions"]
 layout_mode = 2
 text = "离开房间"
+
+[node name="Settings" type="Button" parent="UI/RoomScreen/Layout/Actions"]
+layout_mode = 2
+text = "设置"
 
 [node name="TacticsScreen" type="Control" parent="UI"]
 visible = false
@@ -568,6 +584,10 @@ size_flags_horizontal = 3
 placeholder_text = "Enter发送"
 max_length = 200
 
+[node name="Settings" type="Button" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+text = "设置  ESC"
+
 [node name="BottomBackdrop" type="Panel" parent="UI/MatchHUD"]
 layout_mode = 1
 anchors_preset = 12
@@ -677,6 +697,10 @@ theme_override_font_sizes/font_size = 24
 text = "红队 0 — 0 蓝队"
 horizontal_alignment = 1
 
+[node name="Settings" type="Button" parent="UI/ResultScreen/Panel/Layout"]
+layout_mode = 2
+text = "设置"
+
 [node name="BackToRoom" type="Button" parent="UI/ResultScreen/Panel/Layout"]
 layout_mode = 2
 text = "返回原房间"
@@ -711,3 +735,6 @@ mouse_filter = 2
 [node name="Cursor4" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
 [node name="Cursor5" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
 [node name="Cursor6" parent="UI/CursorLayer" instance=ExtResource("10_cursor")]
+
+[node name="SettingsPanel" parent="UI" instance=ExtResource("12_settings_panel")]
+settings_path = NodePath("../../CurlingSettings")

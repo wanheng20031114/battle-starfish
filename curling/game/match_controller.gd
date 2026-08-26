@@ -54,6 +54,7 @@ var active_team := CurlingConstants.TEAM_NONE
 var state_sequence := 0
 var shot_id := 0
 var reduced_motion := false
+var local_input_locked := false
 var final_result: Dictionary = {}
 
 var _stones: Array[CurlingStone] = []
@@ -158,7 +159,8 @@ func _process(delta: float) -> void:
 				_force_lock_all_teams()
 		Phase.AIMING:
 			phase_time_remaining = maxf(0.0, phase_time_remaining - delta)
-			_update_spin_from_keys(delta)
+			if not local_input_locked:
+				_update_spin_from_keys(delta)
 			_bot_delay -= delta
 			if _is_bot(active_thrower_id) and _bot_delay <= 0.0:
 				_launch_bot_throw()
@@ -194,7 +196,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
+	if not visible or local_input_locked:
 		return
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
@@ -234,6 +236,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key_event := event as InputEventKey
 		if key_event.pressed and key_event.keycode == KEY_ESCAPE:
 			_cancel_drag()
+
+
+func set_local_input_locked(locked: bool) -> void:
+	local_input_locked = locked
+	if not locked:
+		return
+	_cancel_drag()
+	_sweep_down = false
+	_emit_hud()
 
 
 func toggle_lineup_slot(player_id: int, slot_index: int) -> bool:

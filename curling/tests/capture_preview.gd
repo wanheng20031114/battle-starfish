@@ -33,6 +33,18 @@ func _ready() -> void:
 		curling.match_controller.set_tactics_confirmed(1, true)
 		for _frame in range(55):
 			await get_tree().process_frame
+	if _screen == "settings":
+		curling._open_settings()
+		if not curling.settings_panel.is_open() or not curling.match_controller.local_input_locked:
+			push_error("settings panel must lock only local match input while open")
+			get_tree().quit(5)
+			return
+		curling.settings_panel.close_panel()
+		if curling.match_controller.local_input_locked:
+			push_error("closing settings panel must restore local match input")
+			get_tree().quit(6)
+			return
+		curling._open_settings()
 	for _frame in range(4):
 		await get_tree().process_frame
 	var image: Image = get_viewport().get_texture().get_image()

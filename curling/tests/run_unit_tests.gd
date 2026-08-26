@@ -1,5 +1,7 @@
 extends SceneTree
 
+const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
+
 var _failures: Array[String] = []
 var _checks := 0
 
@@ -16,6 +18,7 @@ func _run() -> void:
 	_test_snapshot_codec()
 	_test_heat_grid()
 	_test_match_alternation_and_overtime()
+	_test_settings_persistence()
 	if _failures.is_empty():
 		print("CURLING_UNIT_OK checks=%d" % _checks)
 		quit(0)
@@ -216,6 +219,35 @@ func _test_match_alternation_and_overtime() -> void:
 	_expect(match_controller.hammer_team == CurlingConstants.other_team(initial_hammer), "hammer alternates after blank End")
 	_expect(match_controller.direction == -initial_direction, "direction alternates after every End")
 	match_controller.queue_free()
+
+
+func _test_settings_persistence() -> void:
+	var test_path := "user://curling_settings_test_%d.cfg" % Time.get_ticks_usec()
+	var first := CurlingSettingsScript.new()
+	first.config_path = test_path
+	_expect(first.load_settings() == OK, "missing settings file loads defaults")
+	first.set_resolution_index(3)
+	first.set_fullscreen_enabled(true)
+	first.set_volume_percent(CurlingSettingsScript.CHANNEL_MASTER, 37)
+	first.set_volume_percent(CurlingSettingsScript.CHANNEL_SFX, 64)
+	first.set_reduced_motion_enabled(true)
+	_expect(first.flush_pending_save() == OK, "settings file saves")
+	_expect(FileAccess.file_exists(test_path), "settings file exists after save")
+
+	var second := CurlingSettingsScript.new()
+	second.config_path = test_path
+	_expect(second.load_settings() == OK, "settings file reloads")
+	_expect(second.get_selected_resolution_index() == 3, "resolution persists")
+	_expect(second.is_fullscreen_enabled(), "fullscreen persists")
+	_expect(second.get_volume_percent(CurlingSettingsScript.CHANNEL_MASTER) == 37, "master volume persists")
+	_expect(second.get_volume_percent(CurlingSettingsScript.CHANNEL_SFX) == 64, "SFX volume persists")
+	_expect(second.is_reduced_motion_enabled(), "reduced motion persists")
+	_expect(second.get_resolution_options().size() == 9, "Arc Nice resolution list is available")
+	_expect(second.reset_all_settings() == OK, "settings reset succeeds")
+	_expect(not FileAccess.file_exists(test_path), "settings reset removes local config")
+	_expect(second.get_selected_resolution_index() == CurlingSettingsScript.DEFAULT_RESOLUTION_INDEX, "settings reset restores defaults")
+	first.free()
+	second.free()
 
 
 func _expect(condition: bool, message: String) -> void:

@@ -2,10 +2,13 @@ extends Node
 class_name CurlingApp
 
 const SESSION_FILE := "user://curling_session.json"
+const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
+const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
 
 @onready var net: CurlingNet = $CurlingNet
 @onready var lan_discovery: CurlingLanDiscovery = $LanDiscovery
 @onready var public_lobby: CurlingPublicLobbyClient = $PublicLobbyClient
+@onready var settings: CurlingSettingsScript = $CurlingSettings
 @onready var audio: CurlingAudio = $CurlingAudio
 @onready var match_controller: CurlingMatchController = $MatchController
 
@@ -15,6 +18,7 @@ const SESSION_FILE := "user://curling_session.json"
 @onready var match_hud: Control = $UI/MatchHUD
 @onready var result_screen: Control = $UI/ResultScreen
 @onready var diagnostics: Label = $UI/Diagnostics
+@onready var settings_panel: CurlingSettingsPanelScript = $UI/SettingsPanel
 
 @onready var nickname_input: LineEdit = $UI/LobbyScreen/Layout/Right/Nickname
 @onready var ends_option: OptionButton = $UI/LobbyScreen/Layout/Right/Ends
@@ -92,6 +96,7 @@ func _ready() -> void:
 		if child is CurlingRemoteCursor:
 			_remote_cursors.append(child as CurlingRemoteCursor)
 	minimap.match_controller = match_controller
+	match_controller.reduced_motion = settings.is_reduced_motion_enabled()
 	nickname_input.text = _load_saved_nickname()
 	_ensure_local_session_token()
 	_load_session_offer()
@@ -136,7 +141,13 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
-		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_F3:
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
+			if settings_panel.is_open():
+				settings_panel.close_panel()
+			else:
+				_open_settings()
+			get_viewport().set_input_as_handled()
+		elif key_event.pressed and not key_event.echo and key_event.keycode == KEY_F3:
 			_debug_enabled = not _debug_enabled
 			diagnostics.visible = _debug_enabled
 
@@ -159,6 +170,7 @@ func _connect_ui() -> void:
 	$UI/LobbyScreen/Layout/Right/CodeRow/JoinCode.pressed.connect(_on_join_code_pressed)
 	$UI/LobbyScreen/Layout/Right/PublicActions/Refresh.pressed.connect(func() -> void: public_lobby.list_rooms())
 	$UI/LobbyScreen/Layout/Right/PublicActions/Quick.pressed.connect(_on_quick_match_pressed)
+	$UI/LobbyScreen/Layout/Right/PublicActions/Settings.pressed.connect(_open_settings)
 	resume_button.pressed.connect(_on_resume_pressed)
 	public_rooms.item_activated.connect(_on_public_room_activated)
 	$UI/RoomScreen/Layout/Actions/Red.pressed.connect(func() -> void: _request_room_intent("team", CurlingConstants.TEAM_RED))
@@ -168,10 +180,15 @@ func _connect_ui() -> void:
 	ready_button.pressed.connect(_on_ready_pressed)
 	start_button.pressed.connect(_on_start_pressed)
 	$UI/RoomScreen/Layout/Actions/Leave.pressed.connect(_leave_room)
+	$UI/RoomScreen/Layout/Actions/Settings.pressed.connect(_open_settings)
 	tactics_slots.item_clicked.connect(_on_tactics_slot_clicked)
 	tactics_confirm.pressed.connect(_on_tactics_confirm_pressed)
 	chat_input.text_submitted.connect(_on_chat_submitted)
+	$UI/MatchHUD/RightRail/Layout/Settings.pressed.connect(_open_settings)
+	$UI/ResultScreen/Panel/Layout/Settings.pressed.connect(_open_settings)
 	$UI/ResultScreen/Panel/Layout/BackToRoom.pressed.connect(_return_to_room_after_match)
+	settings_panel.opened.connect(_on_settings_opened)
+	settings_panel.closed.connect(_on_settings_closed)
 
 
 func _connect_runtime() -> void:
@@ -198,6 +215,7 @@ func _connect_runtime() -> void:
 	match_controller.heat_grid.authoritative_segment.connect(_on_authoritative_heat_segment)
 	match_controller.gameplay_event.connect(_on_gameplay_event)
 	match_controller.match_finished.connect(_on_match_finished)
+	settings.reduced_motion_changed.connect(_on_reduced_motion_changed)
 
 
 func _on_demo_pressed() -> void:
@@ -929,6 +947,24 @@ func _show_screen(name: String) -> void:
 	if name in ["lobby", "room", "result"]:
 		match_controller.visible = name == "result"
 	audio.play_ui()
+
+
+func _open_settings() -> void:
+	if not settings_panel.is_open():
+		settings_panel.open_panel()
+
+
+func _on_settings_opened() -> void:
+	# 设置页只锁住本机操作；权威计时、物理和网络同步继续运行。
+	match_controller.set_local_input_locked(true)
+
+
+func _on_settings_closed() -> void:
+	match_controller.set_local_input_locked(false)
+
+
+func _on_reduced_motion_changed(enabled: bool) -> void:
+	match_controller.reduced_motion = enabled
 
 
 func _send_to_host(channel: int, message: Dictionary) -> void:

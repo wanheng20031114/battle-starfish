@@ -1,0 +1,254 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Theme" path="res://curling/ui/curling_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://curling/settings/curling_settings_panel.gd" id="2_script"]
+
+[sub_resource type="StyleBoxFlat" id="Settings_panel"]
+bg_color = Color(0.035, 0.082, 0.122, 0.985)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.388, 0.839, 0.812, 0.42)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0, 0, 0, 0.42)
+shadow_size = 18
+
+[node name="SettingsPanel" type="Control"]
+visible = false
+process_mode = 3
+z_index = 100
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.006, 0.018, 0.027, 0.82)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Panel" type="Panel" parent="Center"]
+custom_minimum_size = Vector2(720, 610)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Settings_panel")
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 34.0
+offset_top = 28.0
+offset_right = -34.0
+offset_bottom = -28.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.94, 0.98, 0.98, 1)
+theme_override_font_sizes/font_size = 34
+text = "设置"
+
+[node name="Eyebrow" type="Label" parent="Center/Panel/Margin/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 13
+text = "CURLING LAB  /  LOCAL"
+vertical_alignment = 1
+
+[node name="HeaderRule" type="HSeparator" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Display" type="VBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Layout/Display"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 14
+text = "显示"
+
+[node name="FullscreenRow" type="HBoxContainer" parent="Center/Panel/Margin/Layout/Display"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Center/Panel/Margin/Layout/Display/FullscreenRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+text = "窗口模式"
+
+[node name="Fullscreen" type="CheckButton" parent="Center/Panel/Margin/Layout/Display/FullscreenRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "使用当前屏幕全屏"
+
+[node name="ResolutionRow" type="HBoxContainer" parent="Center/Panel/Margin/Layout/Display"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Center/Panel/Margin/Layout/Display/ResolutionRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+text = "窗口分辨率"
+
+[node name="Resolution" type="OptionButton" parent="Center/Panel/Margin/Layout/Display/ResolutionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AudioRule" type="HSeparator" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Audio" type="VBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Layout/Audio"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 14
+text = "音量"
+
+[node name="MasterRow" type="HBoxContainer" parent="Center/Panel/Margin/Layout/Audio"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Label" type="Label" parent="Center/Panel/Margin/Layout/Audio/MasterRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+text = "主音量"
+
+[node name="Slider" type="HSlider" parent="Center/Panel/Margin/Layout/Audio/MasterRow"]
+custom_minimum_size = Vector2(330, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+step = 1.0
+value = 100.0
+
+[node name="Value" type="Label" parent="Center/Panel/Margin/Layout/Audio/MasterRow"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+text = "100%"
+horizontal_alignment = 2
+
+[node name="SfxRow" type="HBoxContainer" parent="Center/Panel/Margin/Layout/Audio"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Label" type="Label" parent="Center/Panel/Margin/Layout/Audio/SfxRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+text = "音效音量"
+
+[node name="Slider" type="HSlider" parent="Center/Panel/Margin/Layout/Audio/SfxRow"]
+custom_minimum_size = Vector2(330, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+step = 1.0
+value = 100.0
+
+[node name="Value" type="Label" parent="Center/Panel/Margin/Layout/Audio/SfxRow"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+text = "100%"
+horizontal_alignment = 2
+
+[node name="AccessibilityRule" type="HSeparator" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Accessibility" type="VBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Layout/Accessibility"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_font_sizes/font_size = 14
+text = "辅助"
+
+[node name="ReducedMotionRow" type="HBoxContainer" parent="Center/Panel/Margin/Layout/Accessibility"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Center/Panel/Margin/Layout/Accessibility/ReducedMotionRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+text = "镜头运动"
+
+[node name="ReducedMotion" type="CheckButton" parent="Center/Panel/Margin/Layout/Accessibility/ReducedMotionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "降低镜头运动"
+
+[node name="Hint" type="Label" parent="Center/Panel/Margin/Layout/Accessibility"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.67, 0.7, 1)
+theme_override_font_sizes/font_size = 13
+text = "启用后镜头立即跟随当前投壶，减少缓动造成的视觉位移。"
+autowrap_mode = 2
+
+[node name="Persistence" type="HBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="ConfigPath" type="Label" parent="Center/Panel/Margin/Layout/Persistence"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.42, 0.6, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+text = "本机配置  user://curling_settings.cfg"
+
+[node name="Status" type="Label" parent="Center/Panel/Margin/Layout/Persistence"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.83, 0.79, 1)
+theme_override_font_sizes/font_size = 12
+text = "设置会自动保存"
+horizontal_alignment = 2
+
+[node name="Footer" type="HBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Reset" type="Button" parent="Center/Panel/Margin/Layout/Footer"]
+layout_mode = 2
+text = "恢复默认"
+
+[node name="Spacer" type="Control" parent="Center/Panel/Margin/Layout/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="Close" type="Button" parent="Center/Panel/Margin/Layout/Footer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "关闭  ESC"
