@@ -750,9 +750,7 @@ func _begin_next_throw() -> void:
 
 
 func _launch_active_stone(aim_direction: Vector2, power: float, spin: float) -> void:
-	var speed := CurlingConstants.MIN_THROW_SPEED_MPS + (
-		CurlingConstants.MAX_THROW_SPEED_MPS - CurlingConstants.MIN_THROW_SPEED_MPS
-	) * pow(clampf(power, 0.0, 1.0), CurlingConstants.THROW_POWER_EXPONENT)
+	var speed := CurlingConstants.throw_speed_for_power(power)
 	_stones[active_stone_id].launch(aim_direction, speed, spin)
 	phase = Phase.MOVING
 	phase_time_remaining = 0.0
@@ -938,7 +936,7 @@ func _current_drag_power() -> float:
 
 
 func _predict_path(start: Vector2, aim_direction: Vector2, power: float, spin: float) -> PackedVector2Array:
-	var speed_mps := CurlingConstants.MIN_THROW_SPEED_MPS + (CurlingConstants.MAX_THROW_SPEED_MPS - CurlingConstants.MIN_THROW_SPEED_MPS) * pow(power, CurlingConstants.THROW_POWER_EXPONENT)
+	var speed_mps := CurlingConstants.throw_speed_for_power(power)
 	var velocity := aim_direction * speed_mps * CurlingConstants.PIXELS_PER_METER
 	var angular_velocity := spin
 	var position := start

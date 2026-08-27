@@ -51,7 +51,11 @@ const SETTLE_TIME_SEC := 0.5
 
 const MIN_THROW_SPEED_MPS := 0.5
 const MAX_THROW_SPEED_MPS := 4.5
-const THROW_POWER_EXPONENT := 1.35
+const THROW_DRAW_POWER := 0.75
+## 输入百分比使用线性速度曲线。75%沿用旧标定的直线入垒速度，
+## 100%约等于旧90%强度，让旧50%-90%的有效段扩展到更大的操作范围。
+const THROW_LINEAR_MIN_SPEED_MPS := 1.39319
+const THROW_LINEAR_MAX_SPEED_MPS := 3.96966
 const MAX_SPIN_RADPS := 1.2
 const SPIN_KEY_RATE_RADPS := 1.2
 const AIM_TIME_SEC := 60.0
@@ -145,3 +149,7 @@ static func team_name(team: int) -> String:
 
 static func other_team(team: int) -> int:
 	return TEAM_BLUE if team == TEAM_RED else TEAM_RED
+
+
+static func throw_speed_for_power(power: float) -> float:
+	return lerpf(THROW_LINEAR_MIN_SPEED_MPS, THROW_LINEAR_MAX_SPEED_MPS, clampf(power, 0.0, 1.0))

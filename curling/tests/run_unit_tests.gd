@@ -37,18 +37,17 @@ func _test_dimensions_and_calibration() -> void:
 
 	var draw_distance := 2.0 * CurlingConstants.TEE_FROM_CENTER_M + CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
 	var standard_speed := draw_distance / 22.0 + 0.5 * CurlingConstants.BASE_DRAG_MPS2 * 22.0
-	var beginner_power := 0.773
-	var beginner_speed := CurlingConstants.MIN_THROW_SPEED_MPS + (
-		CurlingConstants.MAX_THROW_SPEED_MPS - CurlingConstants.MIN_THROW_SPEED_MPS
-	) * pow(beginner_power, CurlingConstants.THROW_POWER_EXPONENT)
+	var beginner_power := CurlingConstants.THROW_DRAW_POWER
+	var beginner_speed := CurlingConstants.throw_speed_for_power(beginner_power)
 	var beginner_draw := _integrate_calibration(beginner_speed, 0.0, 0.0)
-	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "77 percent beginner draw reaches tee")
-	var planned_sweep_power := 0.745
-	var planned_sweep_speed := CurlingConstants.MIN_THROW_SPEED_MPS + (
-		CurlingConstants.MAX_THROW_SPEED_MPS - CurlingConstants.MIN_THROW_SPEED_MPS
-	) * pow(planned_sweep_power, CurlingConstants.THROW_POWER_EXPONENT)
+	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "75 percent beginner draw reaches tee")
+	var lower_step := beginner_speed - CurlingConstants.throw_speed_for_power(0.70)
+	var upper_step := CurlingConstants.throw_speed_for_power(0.80) - beginner_speed
+	_expect_close(lower_step, upper_step, 0.001, "throw power is linear around the 75 percent draw")
+	var planned_sweep_power := 0.70
+	var planned_sweep_speed := CurlingConstants.throw_speed_for_power(planned_sweep_power)
 	var planned_sweep_draw := _integrate_calibration(planned_sweep_speed, 0.0, 1.0)
-	_expect_close(float(planned_sweep_draw["forward"]), draw_distance, 0.35, "74.5 percent full-sweep draw reaches tee")
+	_expect_close(float(planned_sweep_draw["forward"]), draw_distance, 0.35, "70 percent full-sweep draw reaches tee")
 	var cold := _integrate_calibration(standard_speed, CurlingConstants.MAX_SPIN_RADPS, 0.0)
 	var swept := _integrate_calibration(standard_speed, CurlingConstants.MAX_SPIN_RADPS, 1.0)
 	var cold_time_estimate := CurlingStone.estimate_remaining_slide_time(standard_speed, 0.0)

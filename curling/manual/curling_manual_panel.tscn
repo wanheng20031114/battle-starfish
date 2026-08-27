@@ -117,7 +117,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.06, 0.38, 0.4, 1)
 theme_override_fonts/font = SubResource("SystemFont_manual_regular")
 theme_override_font_sizes/font_size = 16
-text = "入垒速记：中线瞄准 Tee · 旋转 +0.00 · 力量 77% · 第一遍不擦冰"
+text = "入垒速记：中线瞄准 Tee · 旋转 +0.00 · 力量 75% · 第一遍不擦冰"
 horizontal_alignment = 1
 autowrap_mode = 2
 
