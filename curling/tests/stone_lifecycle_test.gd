@@ -14,6 +14,7 @@ func _ready() -> void:
 	await _test_centerline_throw_after_restart()
 	await _test_remote_second_match_snapshot()
 	await _test_remote_snapshot_matches_host_stones()
+	await _test_gameplay_tee_calibration()
 	await _test_camera_modes()
 	if _failures.is_empty():
 		print("CURLING_STONE_LIFECYCLE_OK stones=%d" % _stones().size())
@@ -202,6 +203,52 @@ func _test_remote_snapshot_matches_host_stones() -> void:
 		_expect_vector_close(stone.remote_target_velocity, expected["velocity"] as Vector2, 0.2, "remote stone %d velocity" % stone_index)
 		if stone_index == active_id and not stone.active_delivered_stone:
 			_failures.append("remote stone sync active moving stone")
+
+
+func _test_gameplay_tee_calibration() -> void:
+	for test_direction in [-1, 1]:
+		controller.start_match(_players(), 1, 1, true, 77889 + test_direction)
+		await get_tree().physics_frame
+		controller.direction = test_direction
+		for candidate in _stones():
+			candidate.linear_damp = 9.0
+		controller._force_lock_all_teams()
+		await get_tree().physics_frame
+		var stone := _stones()[controller.active_stone_id]
+		if not is_zero_approx(stone.linear_damp):
+			_failures.append("reused stone clears stale damping before delivery")
+		var tee := CurlingConstants.tee_position(test_direction)
+		var throw_direction := stone.global_position.direction_to(tee)
+		var max_drag := minf(controller.get_viewport_rect().size.x, controller.get_viewport_rect().size.y) / 3.0
+		controller._drag_origin_screen = Vector2.ZERO
+		controller._drag_current_screen = Vector2(8.0 + CurlingConstants.THROW_TEE_POWER * (max_drag - 8.0), 0.0)
+		controller._dragging = true
+		var hud_power := controller._current_drag_power()
+		controller._dragging = false
+		if not is_equal_approx(hud_power, CurlingConstants.THROW_TEE_POWER):
+			_failures.append("HUD drag maps exactly to the configured Tee power")
+		if not is_zero_approx(controller.heat_grid.sample_heat(stone.global_position)):
+			_failures.append("gameplay Tee calibration starts without sweep heat")
+		if not controller.host_apply_throw(controller.active_thrower_id, throw_direction, hud_power, 0.0):
+			_failures.append("gameplay Tee draw launches through the host path")
+			continue
+		var expected_launch_damp := CurlingConstants.BASE_DRAG_PXPS2 / (
+			CurlingConstants.throw_speed_for_power(hud_power) * CurlingConstants.PIXELS_PER_METER
+		)
+		if absf(stone.linear_damp - expected_launch_damp) > 0.0001:
+			_failures.append("reused stone launch damping derives from the new throw speed")
+		var frames_waited := 0
+		while controller.phase == CurlingMatchController.Phase.MOVING and frames_waited < 1800:
+			await get_tree().physics_frame
+			frames_waited += 1
+		var tee_error_m := stone.global_position.distance_to(tee) / CurlingConstants.PIXELS_PER_METER
+		print("CURLING_GAMEPLAY_TEE_PROBE direction=%d power=%.3f spin=0 heat=0 tee_error=%.3fm" % [test_direction, hud_power, tee_error_m])
+		if controller.phase == CurlingMatchController.Phase.MOVING:
+			_failures.append("gameplay Tee draw settles within 30 seconds")
+		if not stone.in_play or not CurlingRules.is_in_house(stone.global_position, test_direction):
+			_failures.append("75 percent no-sweep gameplay draw remains in the house")
+		if tee_error_m > 0.25:
+			_failures.append("75 percent no-sweep gameplay draw stops near Tee: %.3fm error" % tee_error_m)
 
 
 func _test_camera_modes() -> void:

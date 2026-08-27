@@ -51,8 +51,8 @@ const SETTLE_TIME_SEC := 0.5
 
 const MIN_THROW_SPEED_MPS := 0.5
 const MAX_THROW_SPEED_MPS := 4.5
-const THROW_DRAW_POWER := 0.75
-## 输入百分比使用线性速度曲线。75%沿用旧标定的直线入垒速度，
+const THROW_TEE_POWER := 0.75
+## 输入百分比使用线性速度曲线。75%严格标定为零旋转、不擦冰的直线Tee停点，
 ## 100%约等于旧90%强度，让旧50%-90%的有效段扩展到更大的操作范围。
 const THROW_LINEAR_MIN_SPEED_MPS := 1.39319
 const THROW_LINEAR_MAX_SPEED_MPS := 3.96966

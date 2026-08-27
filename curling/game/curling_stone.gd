@@ -94,6 +94,7 @@ func prepare_for_delivery(position: Vector2, owner_id: int, player_color: Color)
 	rotation = 0.0
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
+	linear_damp = 0.0
 	_set_collision_active(true)
 	queue_redraw()
 
@@ -101,9 +102,12 @@ func prepare_for_delivery(position: Vector2, owner_id: int, player_color: Color)
 func launch(direction: Vector2, speed_mps: float, spin_radps: float) -> void:
 	if not authoritative or not in_play or direction.length_squared() < 0.99:
 		return
+	var speed_pxps := speed_mps * CurlingConstants.PIXELS_PER_METER
+	# RigidBody2D会保留上一轮运行时写入的阻尼；复用冰壶必须以本次初速重新标定。
+	linear_damp = CurlingConstants.BASE_DRAG_PXPS2 / maxf(speed_pxps, CurlingConstants.STOP_SPEED_PXPS)
 	freeze = false
 	sleeping = false
-	linear_velocity = direction.normalized() * speed_mps * CurlingConstants.PIXELS_PER_METER
+	linear_velocity = direction.normalized() * speed_pxps
 	angular_velocity = clampf(spin_radps, -CurlingConstants.MAX_SPIN_RADPS, CurlingConstants.MAX_SPIN_RADPS)
 
 
@@ -113,6 +117,7 @@ func remove_from_play() -> void:
 	active_delivered_stone = false
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
+	linear_damp = 0.0
 	freeze = true
 	visible = false
 	slide_time_marker.visible = false
@@ -122,6 +127,7 @@ func remove_from_play() -> void:
 func freeze_at_rest() -> void:
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
+	linear_damp = 0.0
 	sleeping = true
 	freeze = true
 	active_delivered_stone = false
@@ -131,6 +137,7 @@ func freeze_at_rest() -> void:
 func enable_for_shot() -> void:
 	if not authoritative or not in_play:
 		return
+	linear_damp = 0.0
 	_set_collision_active(true)
 	freeze = false
 	sleeping = true
@@ -150,6 +157,7 @@ func restore_authoritative_state(snapshot: Dictionary) -> void:
 	rotation = restored_rotation
 	linear_velocity = restored_velocity
 	angular_velocity = restored_angular_velocity
+	linear_damp = 0.0
 	# FGZ回滚属于规则纠正，可直接同步刚体状态；下一手开始时再统一解冻场内壶。
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_TRANSFORM, Transform2D(restored_rotation, restored_position))
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_LINEAR_VELOCITY, restored_velocity)

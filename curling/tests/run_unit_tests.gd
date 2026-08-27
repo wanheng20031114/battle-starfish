@@ -12,6 +12,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_dimensions_and_calibration()
+	_test_minimap_geometry()
 	_test_player_capacity_and_disconnects()
 	_test_lineup_allocation()
 	_test_rules()
@@ -34,15 +35,30 @@ func _test_dimensions_and_calibration() -> void:
 	_expect_close(CurlingConstants.STONE_RADIUS_M, 0.1455, 0.00001, "stone radius")
 	_expect_close(CurlingConstants.STONE_MASS_KG, 19.0, 0.001, "stone mass")
 	_expect_close(CurlingConstants.STONE_RESTITUTION, 0.92, 0.0001, "restitution")
+	_expect_close(CurlingConstants.THROW_TEE_POWER, 0.75, 0.0001, "HUD Tee reference power")
 
 	var draw_distance := 2.0 * CurlingConstants.TEE_FROM_CENTER_M + CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
 	var standard_speed := draw_distance / 22.0 + 0.5 * CurlingConstants.BASE_DRAG_MPS2 * 22.0
-	var beginner_power := CurlingConstants.THROW_DRAW_POWER
+	var beginner_power := CurlingConstants.THROW_TEE_POWER
 	var beginner_speed := CurlingConstants.throw_speed_for_power(beginner_power)
 	var beginner_draw := _integrate_calibration(beginner_speed, 0.0, 0.0)
 	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "75 percent no-sweep straight draw reaches tee")
 	var swept_beginner_draw := _integrate_calibration(beginner_speed, 0.0, 1.0)
 	_expect(float(swept_beginner_draw["forward"]) > draw_distance + 2.5, "75 percent full-sweep draw clearly passes tee")
+	var house_reach_m := (
+		CurlingConstants.HOUSE_RADII_PX[0] + CurlingConstants.STONE_RADIUS_PX
+	) / CurlingConstants.PIXELS_PER_METER
+	for front_power in [0.72, 0.74]:
+		var front_draw := _integrate_calibration(CurlingConstants.throw_speed_for_power(front_power), 0.0, 0.0)
+		var front_offset := float(front_draw["forward"]) - draw_distance
+		_expect(front_offset < 0.0 and front_offset >= -house_reach_m, "%d percent no-sweep draw stops in the front house" % roundi(front_power * 100.0))
+	for back_power in [0.76, 0.78]:
+		var back_draw := _integrate_calibration(CurlingConstants.throw_speed_for_power(back_power), 0.0, 0.0)
+		var back_offset := float(back_draw["forward"]) - draw_distance
+		_expect(back_offset > 0.0 and back_offset <= house_reach_m, "%d percent no-sweep draw stops in the back house" % roundi(back_power * 100.0))
+	var overdraw := _integrate_calibration(CurlingConstants.throw_speed_for_power(0.79), 0.0, 0.0)
+	var legal_back_center_m := CurlingConstants.BACK_LINE_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER + CurlingConstants.STONE_RADIUS_M
+	_expect(float(overdraw["forward"]) - draw_distance > legal_back_center_m, "79 percent no-sweep draw crosses the legal back-line limit")
 	var lower_step := beginner_speed - CurlingConstants.throw_speed_for_power(0.70)
 	var upper_step := CurlingConstants.throw_speed_for_power(0.80) - beginner_speed
 	_expect_close(lower_step, upper_step, 0.001, "throw power is linear around the 75 percent draw")
@@ -64,6 +80,27 @@ func _test_dimensions_and_calibration() -> void:
 	_expect_close(float(swept["forward"]) - float(cold["forward"]), 3.0, 0.40, "full heat adds about 3m")
 	var curl_reduction := 1.0 - absf(float(swept["lateral"]) / float(cold["lateral"]))
 	_expect_close(curl_reduction, 0.35, 0.04, "full heat reduces final curl about 35 percent")
+
+
+func _test_minimap_geometry() -> void:
+	var minimap := CurlingMinimap.new()
+	minimap.size = Vector2(312.0, 64.0)
+	var sheet_rect := minimap.minimap_sheet_rect()
+	var physical_aspect := CurlingConstants.SHEET_LENGTH_PX / CurlingConstants.SHEET_WIDTH_PX
+	_expect_close(sheet_rect.size.x / sheet_rect.size.y, physical_aspect, 0.0001, "minimap preserves sheet aspect ratio")
+	var world_scale := minimap.minimap_world_scale()
+	var tee := CurlingConstants.tee_position(1)
+	var tee_point := minimap.world_to_minimap(tee)
+	var house_x := minimap.world_to_minimap(tee + Vector2(CurlingConstants.HOUSE_RADII_PX[0], 0.0))
+	var house_y := minimap.world_to_minimap(tee + Vector2(0.0, CurlingConstants.HOUSE_RADII_PX[0]))
+	var expected_house_radius := CurlingConstants.HOUSE_RADII_PX[0] * world_scale
+	_expect_close(tee_point.distance_to(house_x), expected_house_radius, 0.001, "minimap house uses the world x scale")
+	_expect_close(tee_point.distance_to(house_y), expected_house_radius, 0.001, "minimap house uses the world y scale")
+	_expect(expected_house_radius >= 11.0, "minimap outer house is legible at the HUD size")
+	var world_corner := minimap.world_to_minimap(Vector2(CurlingConstants.HALF_SHEET_LENGTH_PX, CurlingConstants.HALF_SHEET_WIDTH_PX))
+	_expect_close(world_corner.x, sheet_rect.end.x, 0.001, "minimap maps the sheet length exactly")
+	_expect_close(world_corner.y, sheet_rect.end.y, 0.001, "minimap maps the sheet width exactly")
+	minimap.free()
 
 
 func _integrate_calibration(initial_speed: float, initial_spin: float, heat: float) -> Dictionary:

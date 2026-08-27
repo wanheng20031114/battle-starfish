@@ -31,7 +31,7 @@ func _ready() -> void:
 	_last_cold_position = _cold_start
 	_last_no_spin_position = _no_spin_start
 	await get_tree().physics_frame
-	var draw_speed := CurlingConstants.throw_speed_for_power(CurlingConstants.THROW_DRAW_POWER)
+	var draw_speed := CurlingConstants.throw_speed_for_power(CurlingConstants.THROW_TEE_POWER)
 	cold_stone.launch(Vector2.RIGHT, draw_speed, CurlingConstants.MAX_SPIN_RADPS)
 	swept_stone.launch(Vector2.RIGHT, draw_speed, CurlingConstants.MAX_SPIN_RADPS)
 	no_spin_stone.launch(Vector2.RIGHT, draw_speed, 0.0)
