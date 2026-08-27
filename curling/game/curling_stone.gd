@@ -66,7 +66,7 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		/ maxf(speed, CurlingConstants.STOP_SPEED_PXPS)
 	)
 
-	# 圆形刚体的接触、冲量、线性/角阻尼与积分完全交给Godot；这里只叠加curl。
+	# Curl只旋转速度方向，不改变速度大小；滑行距离仍由初速、阻尼和擦冰热量决定。
 	var speed_mps := speed / CurlingConstants.PIXELS_PER_METER
 	var low_speed_factor := 0.25 + 0.75 * clampf(1.0 - speed_mps / CurlingConstants.MAX_THROW_SPEED_MPS, 0.0, 1.0)
 	var curl_multiplier := 1.0 - CurlingConstants.SWEEP_CURL_FORCE_REDUCTION * heat
@@ -76,7 +76,8 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		* low_speed_factor
 		* curl_multiplier
 	)
-	state.apply_central_force(Vector2(-direction.y, direction.x) * curl_acceleration * mass)
+	var turn_radians := curl_acceleration / maxf(speed, CurlingConstants.STOP_SPEED_PXPS) * state.step
+	state.linear_velocity = direction.rotated(turn_radians) * speed
 
 
 func prepare_for_delivery(position: Vector2, owner_id: int, player_color: Color) -> void:

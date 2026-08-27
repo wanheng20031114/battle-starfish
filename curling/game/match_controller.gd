@@ -949,8 +949,17 @@ func _predict_path(start: Vector2, aim_direction: Vector2, power: float, spin: f
 		var velocity_direction := velocity / speed
 		var speed_factor := 0.25 + 0.75 * clampf(1.0 - speed / CurlingConstants.PIXELS_PER_METER / CurlingConstants.MAX_THROW_SPEED_MPS, 0.0, 1.0)
 		var acceleration := -velocity_direction * CurlingConstants.BASE_DRAG_PXPS2
-		acceleration += Vector2(-velocity_direction.y, velocity_direction.x) * CurlingConstants.CURL_ACCEL_PER_RAD_PXPS2 * angular_velocity * speed_factor
 		velocity += acceleration * dt
+		var next_speed := velocity.length()
+		if next_speed > CurlingConstants.STOP_SPEED_PXPS:
+			var turn_radians := (
+				CurlingConstants.CURL_ACCEL_PER_RAD_PXPS2
+				* angular_velocity
+				* speed_factor
+				/ maxf(speed, CurlingConstants.STOP_SPEED_PXPS)
+				* dt
+			)
+			velocity = velocity.normalized().rotated(turn_radians) * next_speed
 		position += velocity * dt
 		angular_velocity *= exp(-CurlingConstants.ANGULAR_DAMP_PER_SEC * dt)
 		if step % 6 == 0:

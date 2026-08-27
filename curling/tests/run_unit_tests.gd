@@ -48,6 +48,7 @@ func _test_dimensions_and_calibration() -> void:
 	var planned_sweep_speed := CurlingConstants.throw_speed_for_power(planned_sweep_power)
 	var planned_sweep_draw := _integrate_calibration(planned_sweep_speed, 0.0, 1.0)
 	_expect_close(float(planned_sweep_draw["forward"]), draw_distance, 0.35, "70 percent full-sweep draw reaches tee")
+	var straight := _integrate_calibration(standard_speed, 0.0, 0.0)
 	var cold := _integrate_calibration(standard_speed, CurlingConstants.MAX_SPIN_RADPS, 0.0)
 	var swept := _integrate_calibration(standard_speed, CurlingConstants.MAX_SPIN_RADPS, 1.0)
 	var cold_time_estimate := CurlingStone.estimate_remaining_slide_time(standard_speed, 0.0)
@@ -55,7 +56,8 @@ func _test_dimensions_and_calibration() -> void:
 	_expect_close(cold_time_estimate, float(cold["time"]), 0.35, "remaining-time label matches cold draw duration")
 	_expect(swept_time_estimate > cold_time_estimate + 1.5, "remaining-time label exposes sweep extension")
 	_expect_close(float(cold["time"]), 22.0, 0.35, "22 second draw")
-	_expect_close(float(cold["forward"]), draw_distance, 0.35, "draw reaches far tee")
+	_expect_close(float(straight["forward"]), draw_distance, 0.35, "draw reaches far tee")
+	_expect_close(float(cold["path"]), float(straight["path"]), 0.02, "spin preserves slide distance")
 	_expect_close(absf(float(cold["lateral"])), 1.5, 0.12, "maximum curl")
 	_expect_close(float(swept["forward"]) - float(cold["forward"]), 3.0, 0.40, "full heat adds about 3m")
 	var curl_reduction := 1.0 - absf(float(swept["lateral"]) / float(cold["lateral"]))
@@ -65,20 +67,33 @@ func _test_dimensions_and_calibration() -> void:
 func _integrate_calibration(initial_speed: float, initial_spin: float, heat: float) -> Dictionary:
 	var velocity := Vector2(initial_speed, 0.0)
 	var position := Vector2.ZERO
+	var path := 0.0
 	var spin := initial_spin
 	var elapsed := 0.0
 	var delta := 1.0 / 600.0
 	while elapsed < 45.0 and velocity.length() > CurlingConstants.STOP_SPEED_MPS:
+		var previous_position := position
 		var speed := velocity.length()
 		var forward := velocity / speed
 		var speed_factor := 0.25 + 0.75 * clampf(1.0 - speed / CurlingConstants.MAX_THROW_SPEED_MPS, 0.0, 1.0)
 		var acceleration := -forward * CurlingConstants.BASE_DRAG_MPS2 * (1.0 - CurlingConstants.SWEEP_DRAG_REDUCTION * heat)
-		acceleration += Vector2(-forward.y, forward.x) * CurlingConstants.CURL_ACCEL_PER_RAD_MPS2 * spin * speed_factor * (1.0 - CurlingConstants.SWEEP_CURL_FORCE_REDUCTION * heat)
 		velocity += acceleration * delta
+		var next_speed := velocity.length()
+		if next_speed > CurlingConstants.STOP_SPEED_MPS:
+			var turn_radians := (
+				CurlingConstants.CURL_ACCEL_PER_RAD_MPS2
+				* spin
+				* speed_factor
+				* (1.0 - CurlingConstants.SWEEP_CURL_FORCE_REDUCTION * heat)
+				/ maxf(speed, CurlingConstants.STOP_SPEED_MPS)
+				* delta
+			)
+			velocity = velocity.normalized().rotated(turn_radians) * next_speed
 		position += velocity * delta
+		path += position.distance_to(previous_position)
 		spin *= exp(-CurlingConstants.ANGULAR_DAMP_PER_SEC * delta)
 		elapsed += delta
-	return {"time": elapsed, "forward": position.x, "lateral": position.y}
+	return {"time": elapsed, "forward": position.x, "lateral": position.y, "path": path}
 
 
 func _test_lineup_allocation() -> void:

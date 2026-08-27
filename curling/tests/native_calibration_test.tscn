@@ -20,3 +20,5 @@ stone_id = 0
 [node name="SweptStone" parent="." instance=ExtResource("2_stone")]
 stone_id = 1
 
+[node name="NoSpinStone" parent="." instance=ExtResource("2_stone")]
+stone_id = 2
