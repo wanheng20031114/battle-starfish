@@ -66,7 +66,8 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		/ maxf(speed, CurlingConstants.STOP_SPEED_PXPS)
 	)
 
-	# Curl只旋转速度方向，不改变速度大小；滑行距离仍由初速、阻尼和擦冰热量决定。
+	# Curl只旋转速度方向，不改变速度大小；停止时间和总路径仍由初速、阻尼与擦冰热量决定。
+	# 曲线路径沿原瞄准方向的投影会略短，这不是额外阻力。
 	var speed_mps := speed / CurlingConstants.PIXELS_PER_METER
 	var low_speed_factor := 0.25 + 0.75 * clampf(1.0 - speed_mps / CurlingConstants.MAX_THROW_SPEED_MPS, 0.0, 1.0)
 	var curl_multiplier := 1.0 - CurlingConstants.SWEEP_CURL_FORCE_REDUCTION * heat
