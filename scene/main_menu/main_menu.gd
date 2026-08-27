@@ -4,40 +4,48 @@ const CURLING_SCENE := "res://curling/curling.tscn"
 const ARCHIVED_TEST_EXECUTABLE := "res://backup/3d-camera-demo/build/BattleStarfish.exe"
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
 const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
+const INTRO_BUTTON_OFFSET_Y := 52.0
+const INTRO_BUTTON_DURATION := 0.32
+const INTRO_BUTTON_STAGGER := 0.055
 
 @onready var settings: CurlingSettingsScript = $CurlingSettings
-@onready var starfield: Node2D = $Starfield
+@onready var seabed_starfish: Node2D = $SeabedStarfish
 @onready var content: VBoxContainer = $Content
-@onready var test_scene_button: Button = $Content/Menu/TestSceneButton
-@onready var multiplayer_button: Button = $Content/Menu/MultiplayerButton
-@onready var settings_button: Button = $Content/Menu/SettingsButton
-@onready var quit_button: Button = $Content/Menu/QuitButton
+@onready var single_player_button: Button = $Content/Menu/SinglePlayerSlot/SinglePlayerButton
+@onready var test_scene_button: Button = $Content/Menu/TestSceneSlot/TestSceneButton
+@onready var curling_button: Button = $Content/Menu/CurlingSlot/CurlingButton
+@onready var settings_button: Button = $Content/Menu/SettingsSlot/SettingsButton
+@onready var quit_button: Button = $Content/Menu/QuitSlot/QuitButton
 @onready var status_label: Label = $Content/StatusLabel
 @onready var settings_panel: CurlingSettingsPanelScript = $SettingsPanel
 
 var _button_tweens: Dictionary = {}
+var _menu_buttons: Array[Button] = []
+var _button_rest_positions: Dictionary = {}
 var _intro_tween: Tween
 var _content_rest_position := Vector2.ZERO
 var _content_layout_ready := false
+var _intro_running := false
 
 
 func _ready() -> void:
-	var active_buttons: Array[Button] = [
+	_menu_buttons = [
+		single_player_button,
 		test_scene_button,
-		multiplayer_button,
+		curling_button,
 		settings_button,
 		quit_button,
 	]
-	for button in active_buttons:
+	for button in _menu_buttons:
+		if button.disabled:
+			continue
 		button.mouse_entered.connect(_on_button_emphasized.bind(button))
 		button.mouse_exited.connect(_on_button_released.bind(button))
 		button.focus_entered.connect(_on_button_emphasized.bind(button))
 		button.focus_exited.connect(_on_button_released.bind(button))
 
 	settings.reduced_motion_changed.connect(_on_reduced_motion_changed)
-	settings_panel.closed.connect(_on_settings_closed)
 	_on_reduced_motion_changed(settings.is_reduced_motion_enabled())
-	multiplayer_button.grab_focus()
 	call_deferred("_start_intro")
 
 
@@ -51,22 +59,58 @@ func _start_intro() -> void:
 	_content_rest_position = content.position
 	_content_layout_ready = true
 	if settings.is_reduced_motion_enabled():
-		content.modulate = Color.WHITE
+		_reset_intro_visuals()
 		return
 
+	_intro_running = true
 	content.position = _content_rest_position + Vector2(-18.0, 0.0)
 	content.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	_intro_tween = create_tween().set_parallel(true)
-	_intro_tween.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
-	_intro_tween.tween_property(content, "position", _content_rest_position, 0.55)
-	_intro_tween.tween_property(content, "modulate", Color.WHITE, 0.42)
+	_intro_tween.tween_property(content, "position", _content_rest_position, 0.48).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	_intro_tween.tween_property(content, "modulate", Color.WHITE, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	for index in _menu_buttons.size():
+		var button := _menu_buttons[index]
+		var delay := index * INTRO_BUTTON_STAGGER
+		var rest_position := button.position
+		_button_rest_positions[button] = rest_position
+		button.pivot_offset = Vector2(0.0, button.size.y)
+		button.position.y += INTRO_BUTTON_OFFSET_Y
+		button.scale = Vector2(0.97, 0.88)
+		button.modulate.a = 0.0
+		_intro_tween.tween_property(button, "position:y", rest_position.y, INTRO_BUTTON_DURATION).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_intro_tween.tween_property(button, "scale", Vector2.ONE, INTRO_BUTTON_DURATION).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_intro_tween.tween_property(button, "modulate:a", 1.0, 0.13).set_delay(delay).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	_intro_tween.finished.connect(_finish_intro)
+
+
+func _finish_intro() -> void:
+	_intro_tween = null
+	_intro_running = false
+	_reset_intro_visuals()
+
+
+func _reset_intro_visuals() -> void:
+	content.position = _content_rest_position
+	content.modulate = Color.WHITE
+	for button in _menu_buttons:
+		if _button_rest_positions.has(button):
+			var rest_position: Vector2 = _button_rest_positions[button]
+			button.position = rest_position
+		button.scale = Vector2.ONE
+		button.modulate.a = 1.0
 
 
 func _on_button_emphasized(button: Button) -> void:
+	if _intro_running:
+		return
 	_animate_button(button, 1.018)
 
 
 func _on_button_released(button: Button) -> void:
+	if _intro_running:
+		return
 	_animate_button(button, 1.0)
 
 
@@ -98,10 +142,10 @@ func _on_test_scene_pressed() -> void:
 	_set_status("归档测试场景已在独立窗口启动。")
 
 
-func _on_multiplayer_pressed() -> void:
+func _on_curling_pressed() -> void:
 	var error := get_tree().change_scene_to_file(CURLING_SCENE)
 	if error != OK:
-		_set_status("多人游戏载入失败：%s" % error_string(error), true)
+		_set_status("冰壶载入失败：%s" % error_string(error), true)
 
 
 func _on_settings_pressed() -> void:
@@ -114,19 +158,14 @@ func _on_quit_pressed() -> void:
 	get_tree().quit()
 
 
-func _on_settings_closed() -> void:
-	settings_button.grab_focus()
-
-
 func _on_reduced_motion_changed(enabled: bool) -> void:
-	starfield.process_mode = Node.PROCESS_MODE_DISABLED if enabled else Node.PROCESS_MODE_INHERIT
+	seabed_starfish.process_mode = Node.PROCESS_MODE_DISABLED if enabled else Node.PROCESS_MODE_INHERIT
 	if enabled and _content_layout_ready:
 		if _intro_tween != null and _intro_tween.is_valid():
 			_intro_tween.kill()
-		content.position = _content_rest_position
-		content.modulate = Color.WHITE
-		for button in [test_scene_button, multiplayer_button, settings_button, quit_button]:
-			button.scale = Vector2.ONE
+		_intro_tween = null
+		_intro_running = false
+		_reset_intro_visuals()
 
 
 func _set_status(message: String, is_error := false) -> void:

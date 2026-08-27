@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://curling/curling.gd" id="1_app"]
 [ext_resource type="Theme" path="res://curling/ui/curling_theme.tres" id="2_theme"]
@@ -12,13 +12,25 @@
 [ext_resource type="PackedScene" path="res://curling/ui/remote_cursor.tscn" id="10_cursor"]
 [ext_resource type="Script" path="res://curling/settings/curling_settings.gd" id="11_settings"]
 [ext_resource type="PackedScene" path="res://curling/settings/curling_settings_panel.tscn" id="12_settings_panel"]
+[ext_resource type="Texture2D" path="res://assets/main_menu/selected/shallow_tidal_arch_background.png" id="13_background"]
+[ext_resource type="PackedScene" path="res://curling/manual/curling_manual_panel.tscn" id="14_manual_panel"]
+[ext_resource type="Texture2D" path="res://assets/ui_pixel/production/large_sandstone_frame.png" id="15_tactics_frame"]
+[ext_resource type="PackedScene" path="res://curling/ui/components/sandstone_button.tscn" id="16_sandstone_button"]
+[ext_resource type="FontFile" path="res://assets/fonts/ZCOOLKuaiLe-Regular.ttf" id="17_display_font"]
 
 [sub_resource type="StyleBoxFlat" id="Top_bar"]
-bg_color = Color(0.031, 0.078, 0.118, 0.94)
-border_width_bottom = 1
-border_color = Color(0.31, 0.62, 0.67, 0.42)
+bg_color = Color(0.957, 0.866, 0.624, 0.94)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.47, 0.57, 0.48, 0.58)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
 corner_radius_bottom_left = 8
 corner_radius_bottom_right = 8
+
+[sub_resource type="StyleBoxEmpty" id="Pixel_frame_empty"]
 
 [node name="Curling" type="Node"]
 script = ExtResource("1_app")
@@ -62,6 +74,116 @@ volume_db = -12.0
 
 [node name="UI" type="CanvasLayer" parent="."]
 
+[node name="UsernameScreen" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="Background" type="TextureRect" parent="UI/UsernameScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("13_background")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Wash" type="ColorRect" parent="UI/UsernameScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.75, 0.98, 0.93, 0.26)
+
+[node name="Center" type="CenterContainer" parent="UI/UsernameScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="Panel" parent="UI/UsernameScreen/Center"]
+custom_minimum_size = Vector2(560, 310)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/UsernameScreen/Center/Card"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 34.0
+offset_top = 28.0
+offset_right = -34.0
+offset_bottom = -28.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="UI/UsernameScreen/Center/Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Eyebrow" type="Label" parent="UI/UsernameScreen/Center/Card/Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
+theme_override_font_sizes/font_size = 14
+text = "BATTLE STARFISH  /  CURLING"
+horizontal_alignment = 1
+
+[node name="Title" type="Label" parent="UI/UsernameScreen/Center/Card/Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "进入冰壶"
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="UI/UsernameScreen/Center/Card/Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.18, 0.40, 0.42, 1)
+text = "确认用户名后进入多人冰壶大厅。"
+horizontal_alignment = 1
+
+[node name="UsernameInput" type="LineEdit" parent="UI/UsernameScreen/Center/Card/Margin/Layout"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+placeholder_text = "用户名（2–16字符）"
+max_length = 16
+alignment = 1
+
+[node name="UsernameError" type="Label" parent="UI/UsernameScreen/Center/Card/Margin/Layout"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.17, 0.13, 1)
+text = "用户名需为2–16个可显示字符"
+horizontal_alignment = 1
+
+[node name="Actions" type="HBoxContainer" parent="UI/UsernameScreen/Center/Card/Margin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="Back" type="Button" parent="UI/UsernameScreen/Center/Card/Margin/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "返回主菜单"
+
+[node name="Confirm" type="Button" parent="UI/UsernameScreen/Center/Card/Margin/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "确认并进入冰壶"
+
 [node name="LobbyScreen" type="Control" parent="UI"]
 layout_mode = 3
 anchors_preset = 15
@@ -69,7 +191,20 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+texture_filter = 2
 theme = ExtResource("2_theme")
+
+[node name="Background" type="TextureRect" parent="UI/LobbyScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("13_background")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="Backdrop" type="ColorRect" parent="UI/LobbyScreen"]
 layout_mode = 1
@@ -78,8 +213,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.025, 0.064, 0.098, 1)
 mouse_filter = 2
+color = Color(0.73, 0.98, 0.92, 0.18)
 
 [node name="IceBand" type="ColorRect" parent="UI/LobbyScreen"]
 layout_mode = 1
@@ -88,7 +223,20 @@ anchor_right = 1.0
 offset_top = 458.0
 offset_bottom = 568.0
 grow_horizontal = 2
-color = Color(0.73, 0.91, 0.92, 0.08)
+color = Color(0.38, 0.80, 0.78, 0.18)
+mouse_filter = 2
+
+[node name="Board" type="Panel" parent="UI/LobbyScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = 18.0
+offset_right = -18.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 
 [node name="Layout" type="HBoxContainer" parent="UI/LobbyScreen"]
@@ -97,80 +245,107 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 64.0
-offset_top = 48.0
+offset_top = 64.0
 offset_right = -64.0
-offset_bottom = -48.0
+offset_bottom = -68.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 70
+theme_override_constants/separation = 36
 
 [node name="Left" type="VBoxContainer" parent="UI/LobbyScreen/Layout"]
-custom_minimum_size = Vector2(430, 0)
+custom_minimum_size = Vector2(500, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 14
+theme_override_constants/separation = 18
 
 [node name="Eyebrow" type="Label" parent="UI/LobbyScreen/Layout/Left"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_colors/font_color = Color(0.05, 0.28, 0.34, 0.42)
 theme_override_font_sizes/font_size = 14
-text = "BATTLE STARFISH · LARGE NETWORK TEST"
+text = "BATTLE STARFISH  /  CURLING TEST"
 
 [node name="Title" type="Label" parent="UI/LobbyScreen/Layout/Left"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.98, 0.98, 1)
+theme_override_colors/font_color = Color(0.02, 0.16, 0.25, 1)
 theme_override_font_sizes/font_size = 54
-text = "CURLING\nLAB"
+text = "多人游戏"
 
 [node name="Rule" type="HSeparator" parent="UI/LobbyScreen/Layout/Left"]
-custom_minimum_size = Vector2(0, 26)
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 
 [node name="Subtitle" type="Label" parent="UI/LobbyScreen/Layout/Left"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.69, 0.82, 0.84, 1)
+theme_override_colors/font_color = Color(0.06, 0.36, 0.42, 1)
 theme_override_font_sizes/font_size = 20
 text = "二至八人的原生物理冰壶实验"
 
 [node name="Body" type="Label" parent="UI/LobbyScreen/Layout/Left"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.48, 0.64, 0.68, 1)
-theme_override_font_sizes/font_size = 15
-text = "投壶、碰撞、curl与多人擦冰都在同一条权威冰道上发生。\n代码独立于Battle Starfish主玩法。"
+theme_override_colors/font_color = Color(0.10, 0.34, 0.39, 1)
+theme_override_font_sizes/font_size = 17
+text = "投壶、碰撞、curl与多人擦冰都在同一条权威冰道上发生。\n代码独立于 Battle Starfish 主玩法。"
 autowrap_mode = 2
 
 [node name="Footnote" type="Label" parent="UI/LobbyScreen/Layout/Left"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.37, 0.54, 0.58, 1)
+theme_override_colors/font_color = Color(0.05, 0.28, 0.34, 0.32)
 theme_override_font_sizes/font_size = 13
 text = "MOUSE + KEYBOARD  /  GODOT 4.6  /  WINDOWS"
 
 [node name="Right" type="VBoxContainer" parent="UI/LobbyScreen/Layout"]
-custom_minimum_size = Vector2(500, 0)
+custom_minimum_size = Vector2(660, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 9
+theme_override_constants/separation = 10
 
 [node name="Section" type="Label" parent="UI/LobbyScreen/Layout/Right"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.86, 0.94, 0.95, 1)
+theme_override_colors/font_color = Color(0.02, 0.16, 0.25, 1)
 theme_override_font_sizes/font_size = 22
-text = "开始测试"
+text = "房间与匹配"
+horizontal_alignment = 1
+
+[node name="IdentityRow" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Identity" type="Label" parent="UI/LobbyScreen/Layout/Right/IdentityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.06, 0.36, 0.42, 1)
+text = "当前玩家：未确认"
+vertical_alignment = 1
+
+[node name="ChangeNickname" type="Button" parent="UI/LobbyScreen/Layout/Right/IdentityRow"]
+custom_minimum_size = Vector2(150, 42)
+layout_mode = 2
+text = "更改用户名"
 
 [node name="Nickname" type="LineEdit" parent="UI/LobbyScreen/Layout/Right"]
+visible = false
 layout_mode = 2
 placeholder_text = "昵称（2–16字符）"
 max_length = 16
 
-[node name="Ends" type="OptionButton" parent="UI/LobbyScreen/Layout/Right"]
+[node name="EndsRow" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 
+[node name="Ends" type="OptionButton" parent="UI/LobbyScreen/Layout/Right/EndsRow"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="Demo" type="Button" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "单机演示 · 8人模拟"
 
 [node name="NetworkActions" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -185,6 +360,7 @@ size_flags_horizontal = 3
 text = "创建公网房"
 
 [node name="AddressRow" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -195,10 +371,12 @@ placeholder_text = "LAN Host IP"
 text = "127.0.0.1"
 
 [node name="JoinLan" type="Button" parent="UI/LobbyScreen/Layout/Right/AddressRow"]
+custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 text = "加入LAN"
 
 [node name="CodeRow" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -209,10 +387,12 @@ placeholder_text = "6位公网房间码"
 max_length = 6
 
 [node name="JoinCode" type="Button" parent="UI/LobbyScreen/Layout/Right/CodeRow"]
+custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 text = "加入代码房"
 
 [node name="PublicActions" type="HBoxContainer" parent="UI/LobbyScreen/Layout/Right"]
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -233,24 +413,25 @@ size_flags_horizontal = 3
 text = "恢复上局"
 
 [node name="Settings" type="Button" parent="UI/LobbyScreen/Layout/Right/PublicActions"]
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 text = "设置"
 
 [node name="PublicRooms" type="ItemList" parent="UI/LobbyScreen/Layout/Right"]
-custom_minimum_size = Vector2(0, 112)
+custom_minimum_size = Vector2(0, 144)
 layout_mode = 2
 size_flags_vertical = 3
 allow_reselect = true
 
 [node name="Warning" type="Label" parent="UI/LobbyScreen/Layout/Right"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.92, 0.66, 0.42, 1)
+theme_override_colors/font_color = Color(0.55, 0.30, 0.10, 1)
 theme_override_font_sizes/font_size = 12
 text = "TEST SERVER · http://47.123.6.127:8010 · HTTP与ENet内容未加密"
 
 [node name="Status" type="Label" parent="UI/LobbyScreen/Layout/Right"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.51, 0.76, 0.77, 1)
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
 text = "正在读取房间列表…"
 
 [node name="RoomScreen" type="Control" parent="UI"]
@@ -261,7 +442,20 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+texture_filter = 2
 theme = ExtResource("2_theme")
+
+[node name="Background" type="TextureRect" parent="UI/RoomScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("13_background")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="Backdrop" type="ColorRect" parent="UI/RoomScreen"]
 layout_mode = 1
@@ -270,34 +464,52 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.025, 0.064, 0.098, 1)
+mouse_filter = 2
+color = Color(0.73, 0.98, 0.92, 0.18)
+
+[node name="Board" type="Panel" parent="UI/RoomScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 28.0
+offset_top = 28.0
+offset_right = -28.0
+offset_bottom = -28.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
 [node name="Layout" type="VBoxContainer" parent="UI/RoomScreen"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 80.0
-offset_top = 56.0
-offset_right = -80.0
-offset_bottom = -56.0
+offset_left = 78.0
+offset_top = 58.0
+offset_right = -78.0
+offset_bottom = -62.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 18
 
 [node name="Header" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 
 [node name="RoomTitle" type="Label" parent="UI/RoomScreen/Layout/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.02, 0.16, 0.25, 1)
 theme_override_font_sizes/font_size = 28
 text = "房间"
+vertical_alignment = 1
 
 [node name="Hint" type="Label" parent="UI/RoomScreen/Layout/Header"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.48, 0.7, 0.73, 1)
+theme_override_colors/font_color = Color(0.10, 0.34, 0.39, 1)
 text = "选择队伍并准备"
+vertical_alignment = 1
 
 [node name="Teams" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
 layout_mode = 2
@@ -340,31 +552,36 @@ text = "等待队员"
 
 [node name="HostAssign" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
 visible = false
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="Label" type="Label" parent="UI/RoomScreen/Layout/HostAssign"]
 layout_mode = 2
 text = "HOST 调队"
+vertical_alignment = 1
 
 [node name="Player" type="OptionButton" parent="UI/RoomScreen/Layout/HostAssign"]
 layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="ToRed" type="Button" parent="UI/RoomScreen/Layout/HostAssign"]
+custom_minimum_size = Vector2(132, 40)
 layout_mode = 2
 text = "调入红队"
 
 [node name="ToBlue" type="Button" parent="UI/RoomScreen/Layout/HostAssign"]
+custom_minimum_size = Vector2(132, 40)
 layout_mode = 2
 text = "调入蓝队"
 
 [node name="RoomStatus" type="Label" parent="UI/RoomScreen/Layout"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.51, 0.76, 0.77, 1)
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
 text = "等待玩家"
 
 [node name="Actions" type="HBoxContainer" parent="UI/RoomScreen/Layout"]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -388,7 +605,8 @@ text = "开始战术阶段"
 
 [node name="Leave" type="Button" parent="UI/RoomScreen/Layout/Actions"]
 layout_mode = 2
-text = "离开房间"
+theme_override_colors/font_color = Color(0.55, 0.17, 0.13, 1)
+text = "退出房间"
 
 [node name="Settings" type="Button" parent="UI/RoomScreen/Layout/Actions"]
 layout_mode = 2
@@ -402,6 +620,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+texture_filter = 2
 theme = ExtResource("2_theme")
 
 [node name="Dim" type="ColorRect" parent="UI/TacticsScreen"]
@@ -411,7 +630,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.01, 0.04, 0.06, 0.56)
+color = Color(0.70, 0.95, 0.90, 0.46)
 mouse_filter = 2
 
 [node name="Panel" type="Panel" parent="UI/TacticsScreen"]
@@ -421,50 +640,80 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -310.0
-offset_top = -284.0
-offset_right = 310.0
-offset_bottom = 284.0
+offset_left = -460.0
+offset_top = -330.0
+offset_right = 460.0
+offset_bottom = 330.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_styles/panel = SubResource("Pixel_frame_empty")
+
+[node name="Frame" type="TextureRect" parent="UI/TacticsScreen/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("15_tactics_frame")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="Layout" type="VBoxContainer" parent="UI/TacticsScreen/Panel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = 22.0
-offset_right = -24.0
-offset_bottom = -22.0
+offset_left = 86.0
+offset_top = 42.0
+offset_right = -86.0
+offset_bottom = -34.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="UI/TacticsScreen/Panel/Layout"]
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.02, 0.16, 0.25, 1)
+theme_override_fonts/font = ExtResource("17_display_font")
+theme_override_font_sizes/font_size = 32
 text = "投壶安排"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Timer" type="Label" parent="UI/TacticsScreen/Panel/Layout"]
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
+theme_override_font_sizes/font_size = 19
 text = "120 秒"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Hint" type="Label" parent="UI/TacticsScreen/Panel/Layout"]
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.72, 0.75, 1)
+theme_override_colors/font_color = Color(0.22, 0.43, 0.45, 1)
 text = "点击空位认领，再次点击释放。不能覆盖队友。"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Slots" type="ItemList" parent="UI/TacticsScreen/Panel/Layout"]
 layout_mode = 2
 size_flags_vertical = 3
 allow_reselect = true
 
-[node name="Confirm" type="Button" parent="UI/TacticsScreen/Panel/Layout"]
+[node name="Confirm" parent="UI/TacticsScreen/Panel/Layout" instance=ExtResource("16_sandstone_button")]
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
-text = "确认本队安排"
+display_text = "确认本队安排"
+
+[node name="ExitRoom" parent="UI/TacticsScreen/Panel/Layout" instance=ExtResource("16_sandstone_button")]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+display_text = "退出房间"
 
 [node name="MatchHUD" type="Control" parent="UI"]
 visible = false
@@ -481,10 +730,10 @@ theme = ExtResource("2_theme")
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 18.0
-offset_top = 14.0
-offset_right = -318.0
-offset_bottom = 66.0
+offset_left = 24.0
+offset_top = 18.0
+offset_right = -24.0
+offset_bottom = 82.0
 grow_horizontal = 2
 theme_override_styles/panel = SubResource("Top_bar")
 mouse_filter = 2
@@ -493,10 +742,10 @@ mouse_filter = 2
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 38.0
-offset_top = 22.0
-offset_right = -338.0
-offset_bottom = 58.0
+offset_left = 54.0
+offset_top = 31.0
+offset_right = -54.0
+offset_bottom = 72.0
 grow_horizontal = 2
 theme_override_constants/separation = 22
 mouse_filter = 2
@@ -504,31 +753,33 @@ mouse_filter = 2
 [node name="Score" type="Label" parent="UI/MatchHUD/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 21
+theme_override_font_sizes/font_size = 25
 text = "红 0  —  0 蓝"
 
 [node name="End" type="Label" parent="UI/MatchHUD/TopBar"]
 layout_mode = 2
+theme_override_font_sizes/font_size = 20
 text = "END 1 / 1"
 
 [node name="Timer" type="Label" parent="UI/MatchHUD/TopBar"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
+theme_override_font_sizes/font_size = 29
 text = "60"
 
 [node name="RightRail" type="Panel" parent="UI/MatchHUD"]
 layout_mode = 1
-anchors_preset = 6
+anchors_preset = 3
 anchor_left = 1.0
+anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -292.0
-offset_top = 14.0
-offset_right = -14.0
-offset_bottom = -14.0
+offset_left = -354.0
+offset_top = -414.0
+offset_right = -18.0
+offset_bottom = -18.0
 grow_horizontal = 0
-grow_vertical = 2
+grow_vertical = 0
 mouse_filter = 1
 
 [node name="Layout" type="VBoxContainer" parent="UI/MatchHUD/RightRail"]
@@ -536,36 +787,38 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = -16.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 7
 
 [node name="Active" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "瞄准\n玩家"
+theme_override_font_sizes/font_size = 18
+text = "瞄准 · 玩家"
 
 [node name="Teams" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.74, 0.77, 1)
-text = "后手：红队\n本手：蓝队\n已投：0 / 16"
+theme_override_colors/font_color = Color(0.22, 0.43, 0.45, 1)
+text = "后手 红队 · 本手 蓝队\n已投 0 / 16"
 
 [node name="Minimap" type="Control" parent="UI/MatchHUD/RightRail/Layout"]
-custom_minimum_size = Vector2(0, 92)
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 mouse_filter = 2
 script = ExtResource("9_minimap")
 
 [node name="ChatLabel" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
+visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
 text = "通信"
 
 [node name="ChatHistory" type="RichTextLabel" parent="UI/MatchHUD/RightRail/Layout"]
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_vertical = 3
 scroll_following = true
@@ -584,19 +837,34 @@ size_flags_horizontal = 3
 placeholder_text = "Enter发送"
 max_length = 200
 
-[node name="Settings" type="Button" parent="UI/MatchHUD/RightRail/Layout"]
+[node name="Actions" type="HBoxContainer" parent="UI/MatchHUD/RightRail/Layout"]
 layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Manual" type="Button" parent="UI/MatchHUD/RightRail/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "说明书  F1"
+
+[node name="Settings" type="Button" parent="UI/MatchHUD/RightRail/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
 text = "设置  ESC"
+
+[node name="ExitRoom" type="Button" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.17, 0.13, 1)
+text = "退出房间"
 
 [node name="BottomBackdrop" type="Panel" parent="UI/MatchHUD"]
 layout_mode = 1
 anchors_preset = 12
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 18.0
-offset_top = -72.0
-offset_right = -318.0
-offset_bottom = -14.0
+offset_left = 24.0
+offset_top = -86.0
+offset_right = -380.0
+offset_bottom = -18.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_styles/panel = SubResource("Top_bar")
@@ -607,10 +875,10 @@ layout_mode = 1
 anchors_preset = 12
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 36.0
-offset_top = -62.0
-offset_right = -336.0
-offset_bottom = -22.0
+offset_left = 52.0
+offset_top = -72.0
+offset_right = -410.0
+offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_constants/separation = 12
@@ -622,10 +890,10 @@ size_flags_horizontal = 3
 text = "从壶向后拖拽"
 
 [node name="Power" type="ProgressBar" parent="UI/MatchHUD/BottomBar"]
-custom_minimum_size = Vector2(170, 20)
+custom_minimum_size = Vector2(270, 22)
 layout_mode = 2
 max_value = 100.0
-show_percentage = false
+show_percentage = true
 
 [node name="Spin" type="Label" parent="UI/MatchHUD/BottomBar"]
 layout_mode = 2
@@ -649,7 +917,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.01, 0.04, 0.06, 0.68)
+color = Color(0.70, 0.95, 0.90, 0.50)
 
 [node name="Panel" type="Panel" parent="UI/ResultScreen"]
 layout_mode = 1
@@ -681,7 +949,7 @@ theme_override_constants/separation = 18
 
 [node name="Eyebrow" type="Label" parent="UI/ResultScreen/Panel/Layout"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.388, 0.839, 0.812, 1)
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
 text = "FINAL RESULT"
 horizontal_alignment = 1
 
@@ -704,6 +972,11 @@ text = "设置"
 [node name="BackToRoom" type="Button" parent="UI/ResultScreen/Panel/Layout"]
 layout_mode = 2
 text = "返回原房间"
+
+[node name="ExitRoom" type="Button" parent="UI/ResultScreen/Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.17, 0.13, 1)
+text = "退出房间"
 
 [node name="Diagnostics" type="Label" parent="UI"]
 visible = false
@@ -738,3 +1011,5 @@ mouse_filter = 2
 
 [node name="SettingsPanel" parent="UI" instance=ExtResource("12_settings_panel")]
 settings_path = NodePath("../../CurlingSettings")
+
+[node name="ManualPanel" parent="UI" instance=ExtResource("14_manual_panel")]

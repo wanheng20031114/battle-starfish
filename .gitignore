@@ -1,3 +1,10 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+/build/**
+!/build/.gdignore
+
+
+# 根目录“参考用”仅存放本地参考资料；保留 Godot 忽略标记。
+/参考用/**
+!/参考用/.gdignore

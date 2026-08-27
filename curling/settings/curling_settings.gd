@@ -11,6 +11,7 @@ const BASE_CONTENT_SIZE := Vector2i(1280, 720)
 const SECTION_DISPLAY := "display"
 const SECTION_AUDIO := "audio"
 const SECTION_ACCESSIBILITY := "accessibility"
+const SECTION_PLAYER := "player"
 
 const CHANNEL_MASTER := &"master"
 const CHANNEL_SFX := &"sfx"
@@ -195,6 +196,17 @@ func set_volume_percent(channel: StringName, percent: int) -> void:
 
 func is_reduced_motion_enabled() -> bool:
 	return _reduced_motion
+
+
+func get_player_nickname() -> String:
+	return str(_config.get_value(SECTION_PLAYER, "nickname", ""))
+
+
+func set_player_nickname(nickname: String) -> void:
+	if nickname == get_player_nickname():
+		return
+	_config.set_value(SECTION_PLAYER, "nickname", nickname)
+	_schedule_save()
 
 
 func set_reduced_motion_enabled(enabled: bool) -> void:

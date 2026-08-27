@@ -1,0 +1,78 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://curling/ui/components/textured_base_button.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/ui_pixel/production/frames/button_sandstone.png" id="2_normal"]
+[ext_resource type="Texture2D" path="res://assets/ui_pixel/production/frames/button_aqua.png" id="3_active"]
+[ext_resource type="FontFile" path="res://assets/fonts/ZCOOLKuaiLe-Regular.ttf" id="4_font"]
+
+[sub_resource type="StyleBoxEmpty" id="Button_empty"]
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+
+[node name="SandstoneButton" type="Button"]
+custom_minimum_size = Vector2(180, 68)
+texture_filter = 2
+theme_override_styles/disabled = SubResource("Button_empty")
+theme_override_styles/focus = SubResource("Button_empty")
+theme_override_styles/hover = SubResource("Button_empty")
+theme_override_styles/normal = SubResource("Button_empty")
+theme_override_styles/pressed = SubResource("Button_empty")
+script = ExtResource("1_script")
+normal_texture = ExtResource("2_normal")
+active_texture = ExtResource("3_active")
+
+[node name="Background" type="TextureRect" parent="."]
+show_behind_parent = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_normal")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ContentInsets" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 14.0
+offset_top = 9.0
+offset_right = -14.0
+offset_bottom = -9.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Center" type="CenterContainer" parent="ContentInsets"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Content" type="HBoxContainer" parent="ContentInsets/Center"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 7
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="ContentInsets/Center/Content"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="ContentInsets/Center/Content"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.035, 0.22, 0.33, 1)
+theme_override_colors/font_outline_color = Color(0.97, 0.88, 0.62, 0.92)
+theme_override_constants/outline_size = 2
+theme_override_fonts/font = ExtResource("4_font")
+theme_override_font_sizes/font_size = 22
+vertical_alignment = 1

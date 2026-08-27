@@ -2,8 +2,11 @@ extends Node
 class_name CurlingApp
 
 const SESSION_FILE := "user://curling_session.json"
+const MAIN_MENU_SCENE := "res://scene/main_menu/main_menu.tscn"
+const LEAVE_ACK_TIMEOUT_MS := 1500
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
 const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
+const CurlingManualPanelScript := preload("res://curling/manual/curling_manual_panel.gd")
 
 @onready var net: CurlingNet = $CurlingNet
 @onready var lan_discovery: CurlingLanDiscovery = $LanDiscovery
@@ -12,6 +15,10 @@ const CurlingSettingsPanelScript := preload("res://curling/settings/curling_sett
 @onready var audio: CurlingAudio = $CurlingAudio
 @onready var match_controller: CurlingMatchController = $MatchController
 
+@onready var username_screen: Control = $UI/UsernameScreen
+@onready var username_panel: Panel = $UI/UsernameScreen/Center/Card
+@onready var username_input: LineEdit = $UI/UsernameScreen/Center/Card/Margin/Layout/UsernameInput
+@onready var username_error: Label = $UI/UsernameScreen/Center/Card/Margin/Layout/UsernameError
 @onready var lobby_screen: Control = $UI/LobbyScreen
 @onready var room_screen: Control = $UI/RoomScreen
 @onready var tactics_screen: Control = $UI/TacticsScreen
@@ -19,9 +26,11 @@ const CurlingSettingsPanelScript := preload("res://curling/settings/curling_sett
 @onready var result_screen: Control = $UI/ResultScreen
 @onready var diagnostics: Label = $UI/Diagnostics
 @onready var settings_panel: CurlingSettingsPanelScript = $UI/SettingsPanel
+@onready var manual_panel: CurlingManualPanelScript = $UI/ManualPanel
 
 @onready var nickname_input: LineEdit = $UI/LobbyScreen/Layout/Right/Nickname
-@onready var ends_option: OptionButton = $UI/LobbyScreen/Layout/Right/Ends
+@onready var lobby_identity: Label = $UI/LobbyScreen/Layout/Right/IdentityRow/Identity
+@onready var ends_option: OptionButton = $UI/LobbyScreen/Layout/Right/EndsRow/Ends
 @onready var address_input: LineEdit = $UI/LobbyScreen/Layout/Right/AddressRow/Address
 @onready var room_code_input: LineEdit = $UI/LobbyScreen/Layout/Right/CodeRow/RoomCode
 @onready var lobby_status: Label = $UI/LobbyScreen/Layout/Right/Status
@@ -86,6 +95,11 @@ var _resume_payload: Dictionary = {}
 var _heat_sync_accumulator := 0.0
 var _session_refresh_accumulator := 0.0
 var _cursor_last_received_ms: Dictionary = {}
+var _lobby_services_started := false
+var _username_intro_tween: Tween
+var _current_screen := ""
+var _leaving_room := false
+var _leave_ack_deadline_ms := 0
 
 
 func _ready() -> void:
@@ -97,16 +111,22 @@ func _ready() -> void:
 			_remote_cursors.append(child as CurlingRemoteCursor)
 	minimap.match_controller = match_controller
 	match_controller.reduced_motion = settings.is_reduced_motion_enabled()
-	nickname_input.text = _load_saved_nickname()
+	var saved_nickname := _sanitize_nickname(_load_saved_nickname())
+	# 旧版把占位名写进了配置；迁移后让玩家明确选择自己的名字。
+	if saved_nickname == "冰壶手":
+		saved_nickname = ""
+	username_input.text = saved_nickname
+	nickname_input.text = saved_nickname
+	_update_lobby_identity()
 	_ensure_local_session_token()
 	_load_session_offer()
-	_show_screen("lobby")
-	lan_discovery.start_listening()
-	public_lobby.list_rooms()
+	_show_username_entry()
 	_log.event("app", "ready", {"protocol": CurlingConstants.PROTOCOL_VERSION})
 
 
 func _process(delta: float) -> void:
+	if _leaving_room and Time.get_ticks_msec() >= _leave_ack_deadline_ms:
+		_finish_pending_room_exit()
 	_cursor_send_accumulator += delta
 	_clock_sync_accumulator += delta
 	_heartbeat_accumulator += delta
@@ -141,8 +161,15 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
-		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
-			if settings_panel.is_open():
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_F1:
+			_toggle_manual()
+			get_viewport().set_input_as_handled()
+		elif key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
+			if manual_panel.is_open():
+				manual_panel.close_panel()
+			elif username_screen.visible:
+				_return_to_main_menu()
+			elif settings_panel.is_open():
 				settings_panel.close_panel()
 			else:
 				_open_settings()
@@ -163,6 +190,10 @@ func _setup_options() -> void:
 
 
 func _connect_ui() -> void:
+	$UI/UsernameScreen/Center/Card/Margin/Layout/Actions/Confirm.pressed.connect(_confirm_username)
+	$UI/UsernameScreen/Center/Card/Margin/Layout/Actions/Back.pressed.connect(_return_to_main_menu)
+	username_input.text_submitted.connect(_on_username_submitted)
+	$UI/LobbyScreen/Layout/Right/IdentityRow/ChangeNickname.pressed.connect(_show_username_entry)
 	$UI/LobbyScreen/Layout/Right/Demo.pressed.connect(_on_demo_pressed)
 	$UI/LobbyScreen/Layout/Right/NetworkActions/HostLan.pressed.connect(_on_host_lan_pressed)
 	$UI/LobbyScreen/Layout/Right/NetworkActions/CreatePublic.pressed.connect(_on_create_public_pressed)
@@ -183,12 +214,18 @@ func _connect_ui() -> void:
 	$UI/RoomScreen/Layout/Actions/Settings.pressed.connect(_open_settings)
 	tactics_slots.item_clicked.connect(_on_tactics_slot_clicked)
 	tactics_confirm.pressed.connect(_on_tactics_confirm_pressed)
+	$UI/TacticsScreen/Panel/Layout/ExitRoom.pressed.connect(_leave_room)
 	chat_input.text_submitted.connect(_on_chat_submitted)
-	$UI/MatchHUD/RightRail/Layout/Settings.pressed.connect(_open_settings)
+	$UI/MatchHUD/RightRail/Layout/Actions/Manual.pressed.connect(_open_manual)
+	$UI/MatchHUD/RightRail/Layout/Actions/Settings.pressed.connect(_open_settings)
+	$UI/MatchHUD/RightRail/Layout/ExitRoom.pressed.connect(_leave_room)
 	$UI/ResultScreen/Panel/Layout/Settings.pressed.connect(_open_settings)
 	$UI/ResultScreen/Panel/Layout/BackToRoom.pressed.connect(_return_to_room_after_match)
+	$UI/ResultScreen/Panel/Layout/ExitRoom.pressed.connect(_leave_room)
 	settings_panel.opened.connect(_on_settings_opened)
 	settings_panel.closed.connect(_on_settings_closed)
+	manual_panel.opened.connect(_on_manual_opened)
+	manual_panel.closed.connect(_on_manual_closed)
 
 
 func _connect_runtime() -> void:
@@ -218,8 +255,71 @@ func _connect_runtime() -> void:
 	settings.reduced_motion_changed.connect(_on_reduced_motion_changed)
 
 
-func _on_demo_pressed() -> void:
-	_save_nickname()
+func _show_username_entry(message: String = "") -> void:
+	if username_input.text.is_empty() and not nickname_input.text.is_empty():
+		username_input.text = nickname_input.text
+	username_error.text = message
+	username_error.visible = not message.is_empty()
+	_show_screen("username")
+	_play_username_intro()
+	username_input.call_deferred("grab_focus")
+	username_input.call_deferred("select_all")
+
+
+func _play_username_intro() -> void:
+	if _username_intro_tween != null and _username_intro_tween.is_valid():
+		_username_intro_tween.kill()
+	username_panel.modulate.a = 1.0 if settings.is_reduced_motion_enabled() else 0.0
+	if settings.is_reduced_motion_enabled():
+		return
+	_username_intro_tween = create_tween()
+	_username_intro_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_username_intro_tween.tween_property(username_panel, "modulate:a", 1.0, 0.18)
+
+
+func _on_username_submitted(_submitted: String) -> void:
+	_confirm_username()
+
+
+func _confirm_username(start_services: bool = true, persist_nickname: bool = true) -> void:
+	var nickname := _sanitize_nickname(username_input.text)
+	if nickname.is_empty():
+		username_error.text = "用户名需为2–16个可显示字符"
+		username_error.visible = true
+		username_input.grab_focus()
+		return
+	username_error.visible = false
+	nickname_input.text = nickname
+	username_input.text = nickname
+	_update_lobby_identity()
+	if persist_nickname:
+		_save_nickname()
+	_show_screen("lobby")
+	if start_services:
+		_start_lobby_services()
+
+
+func _start_lobby_services() -> void:
+	if not _lobby_services_started:
+		_lobby_services_started = true
+		lan_discovery.start_listening()
+	public_lobby.list_rooms()
+
+
+func _update_lobby_identity() -> void:
+	var nickname := _sanitize_nickname(nickname_input.text)
+	lobby_identity.text = "当前玩家：%s" % (nickname if not nickname.is_empty() else "未确认")
+
+
+func _return_to_main_menu() -> void:
+	net.shutdown()
+	lan_discovery.stop_listening()
+	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
+
+
+func _on_demo_pressed(persist_nickname: bool = true) -> void:
+	if persist_nickname:
+		_save_nickname()
 	_reset_public_identity()
 	_demo_mode = true
 	_room_ends = _selected_ends()
@@ -315,17 +415,23 @@ func _on_net_connected() -> void:
 
 
 func _on_net_connection_failed(reason: String) -> void:
-	_set_lobby_status(reason)
-	_show_screen("lobby")
+	if reason.contains("nickname_in_use"):
+		_handle_nickname_conflict()
+	else:
+		_set_lobby_status(reason)
+		_show_screen("lobby")
 
 
 func _on_net_disconnected(reason: String) -> void:
 	_log.event("network", "disconnected", {"reason": reason})
+	if _leaving_room:
+		_finish_pending_room_exit()
+		return
 	_set_lobby_status(reason)
 	if _public_role == "host":
 		_clear_session_file()
+	match_controller.reset_to_idle()
 	_show_screen("lobby")
-	match_controller.visible = false
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -343,6 +449,12 @@ func _on_peer_left(peer_id: int) -> void:
 
 
 func _on_net_packet(channel: int, sender_peer_id: int, payload: PackedByteArray) -> void:
+	if _leaving_room:
+		if channel == CurlingConstants.CH_SYSTEM and sender_peer_id == net.host_peer_id:
+			var leave_message := CurlingNet.decode_message(payload, 4096)
+			if str(leave_message.get("type", "")) == "leave_ack":
+				call_deferred("_finish_pending_room_exit")
+		return
 	if channel == CurlingConstants.CH_STONE_SNAPSHOT:
 		if not net.is_host() and sender_peer_id == net.host_peer_id:
 			match_controller.apply_remote_snapshot(payload)
@@ -372,6 +484,7 @@ func _handle_system_message(sender: int, message: Dictionary) -> void:
 			return
 		match type:
 			"room_state": _apply_room_state(message)
+			"register_rejected": _on_registration_rejected(str(message.get("code", "join_rejected")))
 			"match_state":
 				if match_controller.apply_remote_state(message.get("state", {})):
 					if match_controller.phase != CurlingMatchController.Phase.RESULT:
@@ -459,6 +572,7 @@ func _handle_chat_message(sender: int, message: Dictionary) -> void:
 
 func _host_register_player(sender: int, message: Dictionary) -> void:
 	if int(message.get("v", -1)) != CurlingConstants.PROTOCOL_VERSION:
+		_reject_registration(sender, "protocol_mismatch")
 		return
 	var supplied_token := str(message.get("session_token", ""))
 	var old_id := _find_disconnected_player_by_token(supplied_token)
@@ -476,11 +590,17 @@ func _host_register_player(sender: int, message: Dictionary) -> void:
 			_broadcast_match_state()
 		return
 	if _room_started:
+		_reject_registration(sender, "room_started")
 		return
 	if _room_players.size() >= CurlingConstants.MAX_PLAYERS:
+		_reject_registration(sender, "room_full")
 		return
 	var nickname := _sanitize_nickname(str(message.get("nickname", "")))
-	if nickname.is_empty() or _nickname_exists(nickname):
+	if nickname.is_empty():
+		_reject_registration(sender, "invalid_nickname")
+		return
+	if _nickname_exists(nickname):
+		_reject_registration(sender, "nickname_in_use")
 		return
 	var team := _smaller_team()
 	_room_players[sender] = {
@@ -495,6 +615,19 @@ func _host_register_player(sender: int, message: Dictionary) -> void:
 		"session_token": supplied_token,
 	}
 	_broadcast_room_state()
+
+
+func _reject_registration(peer_id: int, code: String) -> void:
+	_send_packet(CurlingConstants.CH_SYSTEM, peer_id, {"type": "register_rejected", "code": code})
+
+
+func _on_registration_rejected(code: String) -> void:
+	net.shutdown()
+	if code == "nickname_in_use":
+		_handle_nickname_conflict(_room_code)
+		return
+	_set_lobby_status("加入房间失败：%s" % _network_error_message(code))
+	_show_screen("lobby")
 
 
 func _host_apply_room_intent(sender: int, message: Dictionary) -> void:
@@ -517,6 +650,8 @@ func _host_remove_player(sender: int) -> void:
 	if sender == net.host_peer_id:
 		_leave_room()
 		return
+	# 主动退出使用应答后再由客户端断开，避免被误判为可重连的普通掉线。
+	_send_packet(CurlingConstants.CH_SYSTEM, sender, {"type": "leave_ack"})
 	if _room_started and _room_players.has(sender):
 		var departed_team := int((_room_players[sender] as Dictionary).get("team", 0))
 		match_controller.set_player_connected(sender, false)
@@ -635,19 +770,18 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 	score_label.text = "红 %d  —  %d 蓝" % [int(data.get("red_score", 0)), int(data.get("blue_score", 0))]
 	end_label.text = "END %d / %d" % [int(data.get("end", 1)), int(data.get("scheduled_ends", 1))]
 	timer_label.text = "%02d" % ceili(float(data.get("time", 0.0)))
-	active_label.text = "%s\n%s" % [str(data.get("phase_name", "")), str(data.get("active_player", ""))]
-	team_status_label.text = "后手：%s\n本手：%s\n已投：%d / 16" % [CurlingConstants.team_name(int(data.get("hammer_team", 0))), CurlingConstants.team_name(int(data.get("active_team", 0))), int(data.get("delivered", 0))]
+	active_label.text = "%s · %s" % [str(data.get("phase_name", "")), str(data.get("active_player", ""))]
+	team_status_label.text = "后手 %s  ·  本手 %s\n已投 %d / 16" % [CurlingConstants.team_name(int(data.get("hammer_team", 0))), CurlingConstants.team_name(int(data.get("active_team", 0))), int(data.get("delivered", 0))]
 	power_bar.value = float(data.get("power", 0.0)) * 100.0
 	spin_label.text = "旋转 %+0.2f" % float(data.get("spin", 0.0))
 	var phase_value := int(data.get("phase", CurlingMatchController.Phase.IDLE))
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
-		CurlingMatchController.Phase.AIMING: instruction_label.text = "从壶向后拖拽 · Q/E或滚轮调旋 · 松开发射"
-		CurlingMatchController.Phase.MOVING: instruction_label.text = "投壶方按住左键快速移动鼠标擦冰"
+		CurlingMatchController.Phase.AIMING: instruction_label.text = "入垒参考 77% · Q/E调旋 · 滚轮/A D/← → 查看赛道"
+		CurlingMatchController.Phase.MOVING: instruction_label.text = "镜头自动跟壶 · 壶上方显示预计剩余时间 · 左键快速擦冰"
 		CurlingMatchController.Phase.SCORING: instruction_label.text = "测量距离并计算本End得分"
-	tactics_screen.visible = phase_value == CurlingMatchController.Phase.TACTICS
-	match_hud.visible = phase_value in [CurlingMatchController.Phase.AIMING, CurlingMatchController.Phase.MOVING, CurlingMatchController.Phase.SCORING]
-	audio.set_sweeping(bool(data.get("sweeping", false)), 0.7)
+	_refresh_match_overlay_visibility(phase_value)
+	audio.set_sweeping(_current_screen == "match" and bool(data.get("sweeping", false)), 0.7)
 
 
 func _on_gameplay_event(event: Dictionary) -> void:
@@ -661,6 +795,7 @@ func _on_gameplay_event(event: Dictionary) -> void:
 		"empty_throw": _last_gameplay_notice = str(event.get("reason", "空投"))
 		"hog_violation": _last_gameplay_notice = "未越过hog line，冰壶移出场外"
 		"free_guard_violation": _last_gameplay_notice = "五壶保护区违规，已恢复投壶前位置"
+		"no_tick_violation": _last_gameplay_notice = "中线保护壶违规，已恢复投壶前位置"
 		"end_scored":
 			_last_gameplay_notice = "%s获得%d分" % [CurlingConstants.team_name(int(event.get("team", 0))), int(event.get("points", 0))]
 			audio.play_score()
@@ -683,27 +818,56 @@ func _return_to_room_after_match() -> void:
 		var player: Dictionary = _room_players[player_id_variant]
 		player["ready"] = false if int(player_id_variant) == (1 if _demo_mode else net.local_peer_id) else bool(player.get("bot", false))
 		_room_players[player_id_variant] = player
-	match_controller.visible = false
 	_show_room()
 	if net.is_online() and net.is_host():
 		_broadcast_room_state()
 
 
 func _leave_room() -> void:
+	if _leaving_room:
+		return
+	if manual_panel.is_open():
+		manual_panel.close_panel()
+	if settings_panel.is_open():
+		settings_panel.close_panel()
+	var wait_for_host_ack := net.is_online() and not net.is_host()
 	if net.is_online() and net.is_host() and net.mode == CurlingNet.Mode.PUBLIC and not _host_capability.is_empty():
 		public_lobby.close_room(_room_code, _host_capability)
-	if net.is_online() and not net.is_host():
+	if wait_for_host_ack:
+		_leaving_room = true
+		_leave_ack_deadline_ms = Time.get_ticks_msec() + LEAVE_ACK_TIMEOUT_MS
 		_send_to_host(CurlingConstants.CH_SYSTEM, {"type": "leave"})
-	net.shutdown()
+	else:
+		net.shutdown()
+	_clear_local_room_state_after_exit()
+	_set_lobby_status("正在退出房间…" if wait_for_host_ack else "已退出房间")
+
+
+func _clear_local_room_state_after_exit() -> void:
 	lan_discovery.stop_advertising()
 	lan_discovery.start_listening()
 	_demo_mode = false
 	_room_started = false
 	_room_players.clear()
+	_disconnect_deadlines.clear()
+	_cursor_last_received_ms.clear()
+	_chat_sent_ms.clear()
+	_chat_messages.clear()
+	chat_history.clear()
+	_last_gameplay_notice = ""
 	_clear_remote_cursors()
-	match_controller.visible = false
+	match_controller.reset_to_idle()
 	_reset_public_identity()
 	_show_screen("lobby")
+
+
+func _finish_pending_room_exit() -> void:
+	if not _leaving_room:
+		return
+	_leaving_room = false
+	_leave_ack_deadline_ms = 0
+	net.shutdown()
+	_set_lobby_status("已退出房间")
 
 
 func _on_chat_submitted(text: String) -> void:
@@ -823,7 +987,11 @@ func _on_public_request_completed(action: String, ok: bool, data: Dictionary) ->
 	if action == "heartbeat":
 		return
 	if not ok:
-		_set_lobby_status("公网请求失败：%s" % str(data.get("detail", "未知错误")))
+		var detail := str(data.get("detail", "unknown_error"))
+		if detail == "nickname_in_use":
+			_handle_nickname_conflict(room_code_input.text.strip_edges().to_upper() if action == "join" else "")
+			return
+		_set_lobby_status("公网请求失败：%s" % _network_error_message(detail))
 		return
 	if action == "list":
 		_public_room_rows.clear()
@@ -843,6 +1011,8 @@ func _on_public_request_completed(action: String, ok: bool, data: Dictionary) ->
 		_public_role = str(data.get("role", "member"))
 		if data.has("nickname"):
 			nickname_input.text = str(data.get("nickname", nickname_input.text))
+			username_input.text = nickname_input.text
+			_update_lobby_identity()
 		_store_session_file()
 		resume_button.visible = false
 		_resume_payload.clear()
@@ -895,12 +1065,13 @@ func _apply_room_state(message: Dictionary) -> void:
 
 
 func _show_room() -> void:
+	match_controller.reset_to_idle()
 	_show_screen("room")
 	_refresh_room_ui()
 
 
 func _refresh_room_ui() -> void:
-	room_title.text = "%s · %s · %d End" % ["单机演示" if _demo_mode else "房间", _room_code, _room_ends]
+	room_title.text = "%s · %s · %d End" % ["自动化测试" if _demo_mode else "房间", _room_code, _room_ends]
 	red_roster.text = _team_roster_text(CurlingConstants.TEAM_RED)
 	blue_roster.text = _team_roster_text(CurlingConstants.TEAM_BLUE)
 	var local_id := 1 if _demo_mode else net.local_peer_id
@@ -938,29 +1109,70 @@ func _update_tactics_ui() -> void:
 	tactics_confirm.text = "取消确认" if confirmed else "确认本队安排"
 
 
+func _refresh_match_overlay_visibility(phase_value: int) -> void:
+	# HUD 信号可能晚于退出/切屏到达；可见性必须同时服从当前顶层画面。
+	var match_screen_active := _current_screen == "match"
+	tactics_screen.visible = match_screen_active and phase_value == CurlingMatchController.Phase.TACTICS
+	match_hud.visible = match_screen_active and phase_value in [
+		CurlingMatchController.Phase.AIMING,
+		CurlingMatchController.Phase.MOVING,
+		CurlingMatchController.Phase.SCORING,
+	]
+
+
 func _show_screen(name: String) -> void:
+	var previous_screen := _current_screen
+	_current_screen = name
+	username_screen.visible = name == "username"
 	lobby_screen.visible = name == "lobby"
 	room_screen.visible = name == "room"
-	tactics_screen.visible = name == "tactics"
-	match_hud.visible = name == "match"
 	result_screen.visible = name == "result"
-	if name in ["lobby", "room", "result"]:
-		match_controller.visible = name == "result"
-	audio.play_ui()
+	match_controller.visible = name in ["match", "result"]
+	_refresh_match_overlay_visibility(match_controller.phase)
+	if not previous_screen.is_empty() and previous_screen != name:
+		audio.play_ui()
 
 
 func _open_settings() -> void:
+	if manual_panel.is_open():
+		manual_panel.close_panel()
 	if not settings_panel.is_open():
 		settings_panel.open_panel()
 
 
 func _on_settings_opened() -> void:
-	# 设置页只锁住本机操作；权威计时、物理和网络同步继续运行。
-	match_controller.set_local_input_locked(true)
+	_refresh_modal_input_lock()
 
 
 func _on_settings_closed() -> void:
-	match_controller.set_local_input_locked(false)
+	_refresh_modal_input_lock()
+
+
+func _toggle_manual() -> void:
+	if manual_panel.is_open():
+		manual_panel.close_panel()
+	else:
+		_open_manual()
+
+
+func _open_manual() -> void:
+	if settings_panel.is_open():
+		settings_panel.close_panel()
+	if not manual_panel.is_open():
+		manual_panel.open_panel()
+
+
+func _on_manual_opened() -> void:
+	_refresh_modal_input_lock()
+
+
+func _on_manual_closed() -> void:
+	_refresh_modal_input_lock()
+
+
+func _refresh_modal_input_lock() -> void:
+	# 弹层只锁住本机操作；权威计时、物理和网络同步继续运行。
+	match_controller.set_local_input_locked(settings_panel.is_open() or manual_panel.is_open())
 
 
 func _on_reduced_motion_changed(enabled: bool) -> void:
@@ -1037,8 +1249,7 @@ func _phase_wire_name() -> String:
 
 
 func _nickname() -> String:
-	var sanitized := _sanitize_nickname(nickname_input.text)
-	return sanitized if not sanitized.is_empty() else "冰壶手"
+	return _sanitize_nickname(nickname_input.text)
 
 
 func _sanitize_nickname(value: String) -> String:
@@ -1049,6 +1260,40 @@ func _sanitize_nickname(value: String) -> String:
 		if trimmed.unicode_at(index) < 32:
 			return ""
 	return trimmed
+
+
+func _network_error_message(code: String) -> String:
+	match code:
+		"nickname_in_use":
+			return "用户名已被占用"
+		"invalid_nickname":
+			return "用户名格式无效"
+		"room_full":
+			return "房间已满"
+		"room_started":
+			return "比赛已经开始"
+		"room_not_found":
+			return "房间不存在或已经关闭"
+		"protocol_mismatch":
+			return "客户端协议版本不一致"
+		"port_exhausted":
+			return "测试服暂时没有可用Relay端口"
+		_:
+			return code if not code.is_empty() and code != "unknown_error" else "未知错误"
+
+
+func _handle_nickname_conflict(requested_code: String = "") -> void:
+	var resume_code := str(_resume_payload.get("code", ""))
+	var resume_nickname := _sanitize_nickname(str(_resume_payload.get("nickname", "")))
+	if (
+		not resume_code.is_empty()
+		and resume_nickname == _nickname()
+		and (requested_code.is_empty() or requested_code == resume_code)
+	):
+		_show_screen("lobby")
+		_set_lobby_status("该名字有可恢复会话，请点击“恢复 %s”；若不是你的会话，请更改用户名" % resume_code)
+		return
+	_show_username_entry("这个房间已有同名玩家，请换一个名字后重试")
 
 
 func _nickname_exists(value: String) -> bool:
@@ -1071,16 +1316,11 @@ func _random_room_code() -> String:
 
 
 func _save_nickname() -> void:
-	var config := ConfigFile.new()
-	config.set_value("player", "nickname", _nickname())
-	config.save("user://curling_settings.cfg")
+	settings.set_player_nickname(_nickname())
 
 
 func _load_saved_nickname() -> String:
-	var config := ConfigFile.new()
-	if config.load("user://curling_settings.cfg") == OK:
-		return str(config.get_value("player", "nickname", "冰壶手"))
-	return "冰壶手"
+	return settings.get_player_nickname()
 
 
 func _store_session_file() -> void:
@@ -1131,6 +1371,8 @@ func _on_resume_pressed() -> void:
 	_public_player_id = str(_resume_payload.get("player_id", ""))
 	_session_token = str(_resume_payload.get("session_token", ""))
 	nickname_input.text = str(_resume_payload.get("nickname", nickname_input.text))
+	username_input.text = nickname_input.text
+	_update_lobby_identity()
 	_set_lobby_status("正在申请重连票据…")
 	public_lobby.resume_room(_room_code, _public_player_id, _session_token)
 

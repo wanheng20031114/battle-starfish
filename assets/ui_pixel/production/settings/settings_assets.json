@@ -1,0 +1,53 @@
+{
+  "transparency_contract": "native RGBA only; crop bounds use Alpha; no RGB-to-Alpha inference",
+  "resampling": "nearest_neighbor",
+  "assets": {
+    "resolution_popup_frame": {
+      "source": "assets/ui_pixel/source/settings_generated/resolution_popup_exact_cropped.png",
+      "output": "assets/ui_pixel/production/settings/resolution_popup_frame.png",
+      "output_size": [
+        240,
+        260
+      ],
+      "processing": "uniform_nearest_fit_to_transparent_canvas"
+    },
+    "toggle_off": {
+      "source": "assets/ui_pixel/source/settings_generated/toggle_off_cropped.png",
+      "atlas_slot": {
+        "clear_bbox": [
+          1143,
+          534,
+          1369,
+          666
+        ],
+        "paste_origin": [
+          1151,
+          542
+        ]
+      },
+      "display_size": [
+        78,
+        44
+      ]
+    },
+    "toggle_on": {
+      "source": "assets/ui_pixel/source/settings_generated/toggle_on_cropped.png",
+      "atlas_slot": {
+        "clear_bbox": [
+          83,
+          832,
+          309,
+          966
+        ],
+        "paste_origin": [
+          91,
+          841
+        ]
+      },
+      "display_size": [
+        78,
+        44
+      ]
+    }
+  }
+}

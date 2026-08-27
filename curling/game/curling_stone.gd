@@ -16,9 +16,19 @@ var remote_target_position := Vector2.ZERO
 var remote_target_rotation := 0.0
 var remote_target_velocity := Vector2.ZERO
 var _remote_samples: Array[Dictionary] = []
+var _in_play_collision_layer := 1
+var _in_play_collision_mask := 1
+
+@onready var slide_time_marker: Node2D = $SlideTimeMarker
+@onready var slide_time_label: Label = $SlideTimeMarker/Time
 
 
 func _ready() -> void:
+	# 场景预先放置16颗壶。未出手的壶不可见，也必须完全退出碰撞；
+	# freeze只会把刚体视作静态物体，本身不会禁用碰撞。
+	_in_play_collision_layer = collision_layer
+	_in_play_collision_mask = collision_mask
+	_set_collision_active(in_play)
 	mass = CurlingConstants.STONE_MASS_KG
 	gravity_scale = 0.0
 	linear_damp_mode = RigidBody2D.DAMP_MODE_REPLACE
@@ -32,9 +42,9 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	if authoritative or not in_play:
-		return
-	_render_buffered_remote_state()
+	if not authoritative and in_play:
+		_render_buffered_remote_state()
+	_update_slide_time_marker()
 
 
 func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
@@ -83,6 +93,7 @@ func prepare_for_delivery(position: Vector2, owner_id: int, player_color: Color)
 	rotation = 0.0
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
+	_set_collision_active(true)
 	queue_redraw()
 
 
@@ -103,6 +114,8 @@ func remove_from_play() -> void:
 	angular_velocity = 0.0
 	freeze = true
 	visible = false
+	slide_time_marker.visible = false
+	_set_collision_active(false)
 
 
 func freeze_at_rest() -> void:
@@ -111,11 +124,13 @@ func freeze_at_rest() -> void:
 	sleeping = true
 	freeze = true
 	active_delivered_stone = false
+	slide_time_marker.visible = false
 
 
 func enable_for_shot() -> void:
 	if not authoritative or not in_play:
 		return
+	_set_collision_active(true)
 	freeze = false
 	sleeping = true
 	active_delivered_stone = false
@@ -138,6 +153,7 @@ func restore_authoritative_state(snapshot: Dictionary) -> void:
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_TRANSFORM, Transform2D(restored_rotation, restored_position))
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_LINEAR_VELOCITY, restored_velocity)
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_ANGULAR_VELOCITY, restored_angular_velocity)
+	_set_collision_active(in_play)
 	sleeping = true
 	active_delivered_stone = false
 
@@ -150,11 +166,13 @@ func apply_remote_snapshot(snapshot: Dictionary, force_snap: bool, is_active_sto
 	in_play = true
 	visible = true
 	freeze = true
+	_set_collision_active(true)
 	var receive_ms := Time.get_ticks_msec()
 	var next_position: Vector2 = snapshot.get("position", global_position)
 	var next_rotation := float(snapshot.get("angle", rotation))
 	var next_velocity: Vector2 = snapshot.get("velocity", Vector2.ZERO)
 	var next_angular_velocity := float(snapshot.get("angular_velocity", 0.0))
+	active_delivered_stone = is_active_stone and next_velocity.length() > CurlingConstants.STOP_SPEED_PXPS
 	var discontinuity := _remote_samples.is_empty()
 	if not _remote_samples.is_empty():
 		var previous: Dictionary = _remote_samples.back()
@@ -181,6 +199,47 @@ func apply_remote_snapshot(snapshot: Dictionary, force_snap: bool, is_active_sto
 	remote_target_position = next_position
 	remote_target_rotation = next_rotation
 	remote_target_velocity = next_velocity
+
+
+func estimated_remaining_slide_time() -> float:
+	var velocity_px := linear_velocity if authoritative else remote_target_velocity
+	var speed_mps := velocity_px.length() / CurlingConstants.PIXELS_PER_METER
+	var heat := heat_grid.sample_heat(global_position) if heat_grid != null else 0.0
+	return estimate_remaining_slide_time(speed_mps, heat)
+
+
+static func estimate_remaining_slide_time(speed_mps: float, heat: float) -> float:
+	if speed_mps <= CurlingConstants.STOP_SPEED_MPS:
+		return 0.0
+	var effective_drag := CurlingConstants.BASE_DRAG_MPS2 * (
+		1.0 - CurlingConstants.SWEEP_DRAG_REDUCTION * clampf(heat, 0.0, 1.0)
+	)
+	return (speed_mps - CurlingConstants.STOP_SPEED_MPS) / effective_drag
+
+
+func _update_slide_time_marker() -> void:
+	slide_time_marker.global_position = global_position
+	slide_time_marker.global_rotation = 0.0
+	var velocity_px := linear_velocity if authoritative else remote_target_velocity
+	var speed_mps := velocity_px.length() / CurlingConstants.PIXELS_PER_METER
+	var show_marker := (
+		in_play
+		and active_delivered_stone
+		and speed_mps > CurlingConstants.STOP_SPEED_MPS
+	)
+	slide_time_marker.visible = show_marker
+	if not show_marker:
+		return
+	var heat := heat_grid.sample_heat(global_position) if heat_grid != null else 0.0
+	var remaining := estimate_remaining_slide_time(speed_mps, heat)
+	var cold_remaining := estimate_remaining_slide_time(speed_mps, 0.0)
+	var sweep_extension := maxf(0.0, remaining - cold_remaining)
+	if sweep_extension >= 0.05:
+		slide_time_label.text = "预计剩余 %.1f 秒\n擦冰 +%.1f 秒" % [remaining, sweep_extension]
+		slide_time_label.add_theme_color_override("font_color", CurlingConstants.CYAN_ACCENT.darkened(0.48))
+	else:
+		slide_time_label.text = "预计剩余 %.1f 秒" % remaining
+		slide_time_label.add_theme_color_override("font_color", CurlingConstants.NAVY_COLOR)
 
 
 func _render_buffered_remote_state() -> void:
@@ -222,9 +281,16 @@ func export_state() -> Dictionary:
 
 
 func _on_body_entered(body: Node) -> void:
-	if body is CurlingStone:
+	if in_play and body is CurlingStone:
 		var other := body as CurlingStone
+		if not other.in_play:
+			return
 		stone_collision.emit(stone_id, other.stone_id, linear_velocity.distance_to(other.linear_velocity))
+
+
+func _set_collision_active(enabled: bool) -> void:
+	collision_layer = _in_play_collision_layer if enabled else 0
+	collision_mask = _in_play_collision_mask if enabled else 0
 
 
 func _draw() -> void:

@@ -91,7 +91,6 @@ team = 2
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(0, 0)
-zoom = Vector2(0.245, 0.245)
+zoom = Vector2(0.24, 0.24)
 position_smoothing_enabled = false
 enabled = false
-

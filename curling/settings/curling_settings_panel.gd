@@ -8,13 +8,34 @@ const CurlingSettingsScript := preload("res://curling/settings/curling_settings.
 
 @export var settings_path: NodePath
 
-@onready var resolution_option: OptionButton = $Center/Panel/Margin/Layout/Display/ResolutionRow/Resolution
-@onready var fullscreen_check: CheckButton = $Center/Panel/Margin/Layout/Display/FullscreenRow/Fullscreen
-@onready var master_slider: HSlider = $Center/Panel/Margin/Layout/Audio/MasterRow/Slider
-@onready var master_value: Label = $Center/Panel/Margin/Layout/Audio/MasterRow/Value
-@onready var sfx_slider: HSlider = $Center/Panel/Margin/Layout/Audio/SfxRow/Slider
-@onready var sfx_value: Label = $Center/Panel/Margin/Layout/Audio/SfxRow/Value
-@onready var reduced_motion_check: CheckButton = $Center/Panel/Margin/Layout/Accessibility/ReducedMotionRow/ReducedMotion
+@onready var resolution_option: OptionButton = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Display/Rows/ContentMargin/Content/ResolutionRow/Resolution",
+	"Center/Panel/Margin/Layout/Display/ResolutionRow/Resolution",
+]) as OptionButton
+@onready var fullscreen_check: CheckButton = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Display/Rows/ContentMargin/Content/FullscreenRow/Fullscreen",
+	"Center/Panel/Margin/Layout/Display/FullscreenRow/Fullscreen",
+]) as CheckButton
+@onready var master_slider: HSlider = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Audio/Rows/ContentMargin/Content/MasterRow/Slider",
+	"Center/Panel/Margin/Layout/Audio/MasterRow/Slider",
+]) as HSlider
+@onready var master_value: Label = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Audio/Rows/ContentMargin/Content/MasterRow/Value",
+	"Center/Panel/Margin/Layout/Audio/MasterRow/Value",
+]) as Label
+@onready var sfx_slider: HSlider = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Audio/Rows/ContentMargin/Content/SfxRow/Slider",
+	"Center/Panel/Margin/Layout/Audio/SfxRow/Slider",
+]) as HSlider
+@onready var sfx_value: Label = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Audio/Rows/ContentMargin/Content/SfxRow/Value",
+	"Center/Panel/Margin/Layout/Audio/SfxRow/Value",
+]) as Label
+@onready var reduced_motion_check: CheckButton = _resolve_control([
+	"Center/Panel/Margin/Layout/BodyScroll/BodyInsets/BodyContent/Accessibility/Rows/ContentMargin/Content/ReducedMotionRow/ReducedMotion",
+	"Center/Panel/Margin/Layout/Accessibility/ReducedMotionRow/ReducedMotion",
+]) as CheckButton
 @onready var config_label: Label = $Center/Panel/Margin/Layout/Persistence/ConfigPath
 @onready var status_label: Label = $Center/Panel/Margin/Layout/Persistence/Status
 @onready var reset_button: Button = $Center/Panel/Margin/Layout/Footer/Reset
@@ -22,6 +43,15 @@ const CurlingSettingsScript := preload("res://curling/settings/curling_settings.
 
 var _settings: CurlingSettingsScript
 var _refreshing := false
+
+
+func _resolve_control(paths: Array[String]) -> Control:
+	for path in paths:
+		var node := get_node_or_null(path)
+		if node is Control:
+			return node as Control
+	push_error("Settings panel is missing expected control: %s" % str(paths))
+	return null
 
 
 func _ready() -> void:

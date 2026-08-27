@@ -20,6 +20,13 @@ enum Phase {
 	RESULT,
 }
 
+const OVERVIEW_CAMERA_ZOOM := 0.24
+const GAMEPLAY_CAMERA_ZOOM := 1.16
+const HOUSE_CAMERA_ZOOM := 1.12
+const CAMERA_PAN_SPEED_PXPS := 1100.0
+const CAMERA_WHEEL_STEP_PX := 320.0
+const CAMERA_X_LIMIT_PX := CurlingConstants.TEE_FROM_CENTER_PX + CurlingConstants.HACK_FROM_TEE_PX
+
 @onready var heat_grid: CurlingHeatGrid = $HeatGrid
 @onready var trajectory: Line2D = $Trajectory
 @onready var game_camera: Camera2D = $Camera2D
@@ -76,6 +83,10 @@ var _pre_shot_state: Array[Dictionary] = []
 var _last_remote_state_sequence := -1
 var _last_remote_shot_id := -1
 var _last_sweep_accept_ms_by_player: Dictionary = {}
+var _camera_phase := Phase.IDLE
+var _manual_camera_x := 0.0
+var _camera_left_held := false
+var _camera_right_held := false
 
 
 func _ready() -> void:
@@ -104,6 +115,7 @@ func start_match(
 		players[int(player.get("id", 0))] = player.duplicate(true)
 	local_player_id = local_id
 	authoritative = is_authoritative
+	_reset_transient_match_state()
 	total_regular_ends = ends if [1, 2, 4].has(ends) else 1
 	scheduled_ends = total_regular_ends
 	current_end = 0
@@ -123,6 +135,51 @@ func start_match(
 		stone.authoritative = authoritative
 		stone.remove_from_play()
 	_begin_tactics()
+	_manual_camera_x = CurlingConstants.tee_position(direction).x
+	game_camera.position = Vector2(_manual_camera_x, 0.0)
+	game_camera.zoom = Vector2.ONE * HOUSE_CAMERA_ZOOM
+	_camera_phase = phase
+
+
+func reset_to_idle() -> void:
+	_reset_transient_match_state()
+	state_sequence = 0
+	shot_id = 0
+	visible = false
+	game_camera.enabled = false
+	for stone in _stones:
+		stone.remove_from_play()
+
+
+func _reset_transient_match_state() -> void:
+	phase = Phase.IDLE
+	phase_time_remaining = 0.0
+	active_stone_id = -1
+	active_thrower_id = 0
+	active_team = CurlingConstants.TEAM_NONE
+	local_input_locked = false
+	_settle_elapsed = 0.0
+	_score_delay = 0.0
+	_bot_delay = 0.0
+	_snapshot_accumulator = 0.0
+	_last_aim_preview_ms = 0
+	_dragging = false
+	_current_spin = 0.0
+	_sweep_down = false
+	_last_sweep_world = Vector2.ZERO
+	_last_sweep_ms = 0
+	_active_touched_other = false
+	_pre_shot_state.clear()
+	_last_remote_state_sequence = -1
+	_last_remote_shot_id = -1
+	_last_sweep_accept_ms_by_player.clear()
+	_camera_phase = Phase.IDLE
+	_manual_camera_x = 0.0
+	_camera_left_held = false
+	_camera_right_held = false
+	trajectory.clear_points()
+	trajectory.visible = false
+	heat_grid.clear()
 
 
 func start_demo(ends: int = 1) -> void:
@@ -147,6 +204,9 @@ func _process(delta: float) -> void:
 		return
 	_process_camera(delta)
 	if not authoritative:
+		_process_remote_phase_timer(delta)
+		if phase == Phase.AIMING and not local_input_locked:
+			_update_spin_from_keys(delta)
 		_emit_hud()
 		return
 	match phase:
@@ -171,6 +231,12 @@ func _process(delta: float) -> void:
 			if _score_delay <= 0.0:
 				_advance_after_score()
 	_emit_hud()
+
+
+func _process_remote_phase_timer(delta: float) -> void:
+	match phase:
+		Phase.TACTICS, Phase.AIMING:
+			phase_time_remaining = maxf(0.0, phase_time_remaining - delta)
 
 
 func _physics_process(delta: float) -> void:
@@ -200,16 +266,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
+		if (
+			mouse_event.pressed
+			and mouse_event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]
+			and phase not in [Phase.IDLE, Phase.MOVING]
+			and not _dragging
+		):
+			var wheel_direction := 1.0 if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
+			_nudge_manual_camera(wheel_direction)
+			get_viewport().set_input_as_handled()
+			return
 		if phase == Phase.AIMING and active_thrower_id == local_player_id:
-			if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP and mouse_event.pressed:
-				_current_spin = clampf(_current_spin + CurlingConstants.SPIN_WHEEL_STEP_RADPS, -CurlingConstants.MAX_SPIN_RADPS, CurlingConstants.MAX_SPIN_RADPS)
-				_refresh_local_aim_preview()
-				get_viewport().set_input_as_handled()
-			elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and mouse_event.pressed:
-				_current_spin = clampf(_current_spin - CurlingConstants.SPIN_WHEEL_STEP_RADPS, -CurlingConstants.MAX_SPIN_RADPS, CurlingConstants.MAX_SPIN_RADPS)
-				_refresh_local_aim_preview()
-				get_viewport().set_input_as_handled()
-			elif mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 				if mouse_event.pressed and _can_begin_drag():
 					_dragging = true
 					_drag_origin_screen = mouse_event.position
@@ -234,6 +302,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			_submit_sweep_motion(get_global_mouse_position())
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
+		var camera_direction := _camera_key_direction(key_event)
+		if camera_direction != 0:
+			if camera_direction < 0:
+				_camera_left_held = key_event.pressed and phase not in [Phase.IDLE, Phase.MOVING]
+			else:
+				_camera_right_held = key_event.pressed and phase not in [Phase.IDLE, Phase.MOVING]
+			if phase not in [Phase.IDLE, Phase.MOVING]:
+				get_viewport().set_input_as_handled()
+			return
 		if key_event.pressed and key_event.keycode == KEY_ESCAPE:
 			_cancel_drag()
 
@@ -244,6 +321,8 @@ func set_local_input_locked(locked: bool) -> void:
 		return
 	_cancel_drag()
 	_sweep_down = false
+	_camera_left_held = false
+	_camera_right_held = false
 	_emit_hud()
 
 
@@ -337,6 +416,8 @@ func apply_remote_state(state: Dictionary) -> bool:
 	if authoritative:
 		return false
 	var previous_phase := phase
+	var previous_shot_id := shot_id
+	var previous_thrower_id := active_thrower_id
 	var incoming_sequence := int(state.get("state_sequence", -1))
 	if incoming_sequence < state_sequence:
 		return false
@@ -355,6 +436,10 @@ func apply_remote_state(state: Dictionary) -> bool:
 	active_thrower_id = int(state.get("active_thrower_id", 0))
 	active_team = int(state.get("active_team", CurlingConstants.TEAM_NONE))
 	shot_id = int(state.get("shot_id", 0))
+	if shot_id != previous_shot_id or active_thrower_id != previous_thrower_id:
+		_current_spin = 0.0
+		_cancel_drag()
+		_sweep_down = false
 	if state.has("players"):
 		players = state["players"].duplicate(true)
 	if state.has("lineups"):
@@ -705,6 +790,9 @@ func _resolve_shot() -> void:
 	if CurlingRules.has_free_guard_violation(_pre_shot_state, post_shot, active_team, delivered_count, direction):
 		_restore_pre_shot_state()
 		gameplay_event.emit({"type": "free_guard_violation", "stone_id": active_stone_id})
+	elif CurlingRules.has_no_tick_violation(_pre_shot_state, post_shot, active_team, delivered_count, direction):
+		_restore_pre_shot_state()
+		gameplay_event.emit({"type": "no_tick_violation", "stone_id": active_stone_id})
 	for stone in _stones:
 		if stone.in_play:
 			stone.freeze_at_rest()
@@ -900,26 +988,65 @@ func _update_spin_from_keys(delta: float) -> void:
 			_refresh_local_aim_preview()
 
 
+func _camera_key_direction(event: InputEventKey) -> int:
+	if event.keycode in [KEY_LEFT, KEY_A] or event.physical_keycode in [KEY_LEFT, KEY_A]:
+		return -1
+	if event.keycode in [KEY_RIGHT, KEY_D] or event.physical_keycode in [KEY_RIGHT, KEY_D]:
+		return 1
+	return 0
+
+
+func _nudge_manual_camera(wheel_direction: float) -> void:
+	_sync_camera_phase_anchor()
+	_manual_camera_x = clampf(
+		_manual_camera_x + wheel_direction * float(direction) * CAMERA_WHEEL_STEP_PX,
+		-CAMERA_X_LIMIT_PX,
+		CAMERA_X_LIMIT_PX
+	)
+
+
+func _sync_camera_phase_anchor() -> void:
+	if _camera_phase == phase:
+		return
+	_camera_phase = phase
+	match phase:
+		Phase.TACTICS, Phase.SCORING, Phase.RESULT:
+			_manual_camera_x = CurlingConstants.tee_position(direction).x
+		Phase.AIMING:
+			_manual_camera_x = CurlingConstants.hack_position(direction).x
+			if active_stone_id >= 0 and active_stone_id < _stones.size() and _stones[active_stone_id].in_play:
+				_manual_camera_x = _stones[active_stone_id].global_position.x
+		Phase.IDLE:
+			_manual_camera_x = 0.0
+	_manual_camera_x = clampf(_manual_camera_x, -CAMERA_X_LIMIT_PX, CAMERA_X_LIMIT_PX)
+
+
 func _process_camera(delta: float) -> void:
 	if not game_camera.enabled:
 		return
-	var target_position := Vector2.ZERO
-	var target_zoom := Vector2.ONE * 0.24
+	_sync_camera_phase_anchor()
+	var target_position := Vector2(_manual_camera_x, 0.0)
+	var target_zoom := Vector2.ONE * OVERVIEW_CAMERA_ZOOM
 	match phase:
 		Phase.TACTICS, Phase.SCORING:
-			target_position = CurlingConstants.tee_position(direction)
-			target_zoom = Vector2.ONE * 0.95
+			target_zoom = Vector2.ONE * HOUSE_CAMERA_ZOOM
 		Phase.AIMING:
-			# 为右侧转播栏预留约300px，完整冰道仍保持可见，hack不会被UI遮住。
-			target_position = (CurlingConstants.hack_position(direction) + CurlingConstants.tee_position(direction)) * 0.5 + Vector2(650.0, 0.0)
-			target_zoom = Vector2.ONE * 0.21
+			target_zoom = Vector2.ONE * GAMEPLAY_CAMERA_ZOOM
 		Phase.MOVING:
 			if active_stone_id >= 0 and active_stone_id < _stones.size() and _stones[active_stone_id].in_play:
 				target_position = _stones[active_stone_id].global_position
-			target_zoom = Vector2.ONE * 0.92
+			target_zoom = Vector2.ONE * GAMEPLAY_CAMERA_ZOOM
 		Phase.RESULT:
-			target_position = CurlingConstants.tee_position(direction)
-			target_zoom = Vector2.ONE * 0.82
+			target_zoom = Vector2.ONE * HOUSE_CAMERA_ZOOM
+	if phase not in [Phase.IDLE, Phase.MOVING] and not _dragging:
+		var pan_axis := float(_camera_right_held) - float(_camera_left_held)
+		if not is_zero_approx(pan_axis):
+			_manual_camera_x = clampf(
+				_manual_camera_x + pan_axis * CAMERA_PAN_SPEED_PXPS * delta,
+				-CAMERA_X_LIMIT_PX,
+				CAMERA_X_LIMIT_PX
+			)
+			target_position.x = _manual_camera_x
 	var camera_weight := 1.0 if reduced_motion else 1.0 - exp(-delta * 4.5)
 	game_camera.position = game_camera.position.lerp(target_position, camera_weight)
 	game_camera.zoom = game_camera.zoom.lerp(target_zoom, camera_weight)

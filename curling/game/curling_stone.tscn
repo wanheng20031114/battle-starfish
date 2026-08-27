@@ -26,3 +26,23 @@ script = ExtResource("1_stone")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape_stone")
+
+[node name="SlideTimeMarker" type="Node2D" parent="."]
+top_level = true
+visible = false
+z_index = 20
+z_as_relative = false
+
+[node name="Time" type="Label" parent="SlideTimeMarker"]
+offset_left = -80.0
+offset_top = -68.0
+offset_right = 80.0
+offset_bottom = -18.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.063, 0.129, 0.196, 1)
+theme_override_colors/font_outline_color = Color(0.918, 0.969, 0.976, 0.96)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 16
+text = "预计剩余 0.0 秒"
+horizontal_alignment = 1
+vertical_alignment = 1

@@ -1,0 +1,158 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Theme" path="res://curling/ui/curling_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://curling/manual/curling_manual_panel.gd" id="2_script"]
+
+[sub_resource type="SystemFont" id="SystemFont_manual_regular"]
+font_names = PackedStringArray("DengXian", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "sans-serif")
+font_weight = 400
+
+[sub_resource type="SystemFont" id="SystemFont_manual_medium"]
+font_names = PackedStringArray("DengXian", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "sans-serif")
+font_weight = 500
+
+[sub_resource type="StyleBoxFlat" id="Manual_panel"]
+bg_color = Color(0.973, 0.89, 0.675, 0.99)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 6
+border_color = Color(0.42, 0.58, 0.51, 0.9)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0.035, 0.18, 0.26, 0.38)
+shadow_size = 20
+shadow_offset = Vector2(0, 8)
+
+[node name="ManualPanel" type="Control"]
+visible = false
+process_mode = 3
+z_index = 110
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+mouse_force_pass_scroll_events = false
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+color = Color(0.035, 0.18, 0.26, 0.72)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Panel" type="Panel" parent="Center"]
+custom_minimum_size = Vector2(960, 650)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Manual_panel")
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 34.0
+offset_top = 24.0
+offset_right = -34.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = SubResource("SystemFont_manual_medium")
+theme_override_font_sizes/font_size = 32
+text = "比赛说明书"
+
+[node name="Eyebrow" type="Label" parent="Center/Panel/Margin/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
+theme_override_fonts/font = SubResource("SystemFont_manual_regular")
+theme_override_font_sizes/font_size = 13
+text = "F1 随时开关  /  比赛继续运行"
+vertical_alignment = 1
+
+[node name="HeaderRule" type="HSeparator" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Notice" type="Label" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.17, 0.13, 1)
+theme_override_fonts/font = SubResource("SystemFont_manual_medium")
+theme_override_font_sizes/font_size = 15
+text = "重要：Hack 起点和赛道中线都没有规则障碍。"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="DrawQuickGuide" type="Label" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.06, 0.38, 0.4, 1)
+theme_override_fonts/font = SubResource("SystemFont_manual_regular")
+theme_override_font_sizes/font_size = 16
+text = "入垒速记：中线瞄准 Tee · 旋转 +0.00 · 力量 77% · 第一遍不擦冰"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Content" type="RichTextLabel" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 2
+mouse_force_pass_scroll_events = false
+bbcode_enabled = true
+fit_content = false
+scroll_active = true
+selection_enabled = true
+autowrap_mode = 3
+language = "zh_CN"
+theme_override_fonts/normal_font = SubResource("SystemFont_manual_regular")
+theme_override_fonts/bold_font = SubResource("SystemFont_manual_medium")
+theme_override_font_sizes/normal_font_size = 17
+theme_override_font_sizes/bold_font_size = 17
+theme_override_constants/line_separation = 5
+
+[node name="Footer" type="HBoxContainer" parent="Center/Panel/Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Hint" type="Label" parent="Center/Panel/Margin/Layout/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.22, 0.43, 0.45, 1)
+theme_override_fonts/font = SubResource("SystemFont_manual_regular")
+theme_override_font_sizes/font_size = 13
+text = "滚轮 / ↑↓ / PgUp PgDn 浏览 · 打开时仅锁住本机操作"
+vertical_alignment = 1
+
+[node name="Close" type="Button" parent="Center/Panel/Margin/Layout/Footer"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+theme_override_fonts/font = SubResource("SystemFont_manual_regular")
+text = "关闭  F1 / ESC"

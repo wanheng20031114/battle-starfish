@@ -13,12 +13,26 @@ config_version=5
 config/name="BattleStarfish"
 run/main_scene="res://scene/main_menu/main_menu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
-config/icon="res://icon.svg"
+run/max_fps=60
+config/icon="res://assets/starfish-cyan-32.png"
+config/windows_native_icon="res://assets/starfish-cyan.ico"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [physics]
 
 3d/physics_engine="Jolt Physics"
+2d/default_gravity=0.0
 
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+viewport/hdr_2d=true
+anti_aliasing/quality/msaa_3d=2

@@ -2,11 +2,16 @@ extends Node2D
 
 var _failures: Array[String] = []
 var _measured_restitution := 0.0
+var _collision_count := 0
 @onready var stones: Array[CurlingStone] = [$StoneA, $StoneB, $StoneC, $StoneD]
 
 
 func _ready() -> void:
+	for stone in stones:
+		stone.stone_collision.connect(_on_stone_collision)
 	await get_tree().physics_frame
+	await _test_inactive_midpoint_is_clear()
+	await _test_inactive_hack_is_clear()
 	await _test_head_on()
 	await _test_offset()
 	await _test_chain()
@@ -23,10 +28,12 @@ func _ready() -> void:
 func _reset_stones(positions: Array[Vector2]) -> void:
 	for index in range(stones.size()):
 		var stone := stones[index]
-		stone.in_play = index < positions.size()
-		stone.visible = stone.in_play
 		stone.authoritative = true
-		stone.active_delivered_stone = false
+		if index < positions.size():
+			stone.prepare_for_delivery(positions[index], index + 1, Color.WHITE)
+			stone.active_delivered_stone = false
+		else:
+			stone.remove_from_play()
 		stone.freeze = true
 		stone.sleeping = true
 		stone.linear_velocity = Vector2.ZERO
@@ -57,6 +64,39 @@ func _wait_physics(seconds: float) -> void:
 	var frames := ceili(seconds * Engine.physics_ticks_per_second)
 	for _frame in range(frames):
 		await get_tree().physics_frame
+
+
+func _test_inactive_midpoint_is_clear() -> void:
+	await _reset_stones([Vector2(-100.0, 0.0)])
+	for index in range(1, stones.size()):
+		stones[index].global_position = Vector2.ZERO
+		PhysicsServer2D.body_set_state(
+			stones[index].get_rid(),
+			PhysicsServer2D.BODY_STATE_TRANSFORM,
+			Transform2D(0.0, Vector2.ZERO)
+		)
+	_collision_count = 0
+	stones[0].launch(Vector2.RIGHT, 2.0, 0.0)
+	await _wait_physics(0.8)
+	if _collision_count != 0 or stones[0].global_position.x <= 0.0:
+		_failures.append("inactive stones do not create a midpoint obstacle")
+
+
+func _test_inactive_hack_is_clear() -> void:
+	await _reset_stones([])
+	var hack := CurlingConstants.hack_position(1)
+	stones[0].prepare_for_delivery(hack, 1, Color.WHITE)
+	stones[0].remove_from_play()
+	stones[1].prepare_for_delivery(hack, 2, Color.WHITE)
+	_collision_count = 0
+	stones[1].launch(Vector2.RIGHT, 2.0, 0.0)
+	await _wait_physics(0.2)
+	if _collision_count != 0 or stones[1].global_position.x <= hack.x:
+		_failures.append("removed stones do not create a hack obstacle")
+
+
+func _on_stone_collision(_stone_id: int, _other_id: int, _speed: float) -> void:
+	_collision_count += 1
 
 
 func _test_head_on() -> void:

@@ -37,8 +37,24 @@ func _test_dimensions_and_calibration() -> void:
 
 	var draw_distance := 2.0 * CurlingConstants.TEE_FROM_CENTER_M + CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
 	var standard_speed := draw_distance / 22.0 + 0.5 * CurlingConstants.BASE_DRAG_MPS2 * 22.0
+	var beginner_power := 0.773
+	var beginner_speed := CurlingConstants.MIN_THROW_SPEED_MPS + (
+		CurlingConstants.MAX_THROW_SPEED_MPS - CurlingConstants.MIN_THROW_SPEED_MPS
+	) * pow(beginner_power, CurlingConstants.THROW_POWER_EXPONENT)
+	var beginner_draw := _integrate_calibration(beginner_speed, 0.0, 0.0)
+	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "77 percent beginner draw reaches tee")
+	var planned_sweep_power := 0.745
+	var planned_sweep_speed := CurlingConstants.MIN_THROW_SPEED_MPS + (
+		CurlingConstants.MAX_THROW_SPEED_MPS - CurlingConstants.MIN_THROW_SPEED_MPS
+	) * pow(planned_sweep_power, CurlingConstants.THROW_POWER_EXPONENT)
+	var planned_sweep_draw := _integrate_calibration(planned_sweep_speed, 0.0, 1.0)
+	_expect_close(float(planned_sweep_draw["forward"]), draw_distance, 0.35, "74.5 percent full-sweep draw reaches tee")
 	var cold := _integrate_calibration(standard_speed, CurlingConstants.MAX_SPIN_RADPS, 0.0)
 	var swept := _integrate_calibration(standard_speed, CurlingConstants.MAX_SPIN_RADPS, 1.0)
+	var cold_time_estimate := CurlingStone.estimate_remaining_slide_time(standard_speed, 0.0)
+	var swept_time_estimate := CurlingStone.estimate_remaining_slide_time(standard_speed, 1.0)
+	_expect_close(cold_time_estimate, float(cold["time"]), 0.35, "remaining-time label matches cold draw duration")
+	_expect(swept_time_estimate > cold_time_estimate + 1.5, "remaining-time label exposes sweep extension")
 	_expect_close(float(cold["time"]), 22.0, 0.35, "22 second draw")
 	_expect_close(float(cold["forward"]), draw_distance, 0.35, "draw reaches far tee")
 	_expect_close(absf(float(cold["lateral"])), 1.5, 0.12, "maximum curl")
@@ -143,11 +159,34 @@ func _test_rules() -> void:
 	_expect(CurlingRules.crossed_far_hog(Vector2(CurlingConstants.far_hog_x(1) + CurlingConstants.STONE_RADIUS_PX + 1.0, 0), 1), "far hog requires whole stone")
 	_expect(CurlingRules.is_out_of_play(Vector2.ZERO + Vector2(0, CurlingConstants.HALF_SHEET_WIDTH_PX), 1), "sideline out")
 	var guard := Vector2((CurlingConstants.far_hog_x(1) + tee.x) * 0.5, CurlingConstants.HOUSE_RADII_PX[0] + 50.0)
+	var hog_biter := Vector2(CurlingConstants.far_hog_x(1) - CurlingConstants.STONE_RADIUS_PX + 0.1, CurlingConstants.HOUSE_RADII_PX[0] + 50.0)
+	var tee_biter_outside_house := Vector2(tee.x - CurlingConstants.STONE_RADIUS_PX + 0.1, CurlingConstants.HOUSE_RADII_PX[0] + 80.0)
+	var reverse_tee := CurlingConstants.tee_position(-1)
+	var reverse_guard := Vector2((CurlingConstants.far_hog_x(-1) + reverse_tee.x) * 0.5, CurlingConstants.HOUSE_RADII_PX[0] + 50.0)
 	_expect(CurlingRules.is_in_free_guard_zone(guard, 1), "guard zone classification")
+	_expect(CurlingRules.is_in_free_guard_zone(hog_biter, 1), "hog-line biter is in FGZ")
+	_expect(not CurlingRules.is_in_free_guard_zone(tee_biter_outside_house, 1), "tee-line biter is not in FGZ")
+	_expect(CurlingRules.is_in_free_guard_zone(reverse_guard, -1), "reverse guard zone classification")
 	var pre: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": guard, "in_play": true}]
 	var post: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": guard, "in_play": false}]
-	_expect(CurlingRules.has_free_guard_violation(pre, post, CurlingConstants.TEAM_RED, 4, 1), "fifth-stone FGZ rollback")
-	_expect(not CurlingRules.has_free_guard_violation(pre, post, CurlingConstants.TEAM_RED, 5, 1), "FGZ protection ends after first five delivered stones")
+	for delivered_before in range(CurlingRules.FREE_GUARD_PROTECTED_STONES):
+		_expect(
+			CurlingRules.has_free_guard_violation(pre, post, CurlingConstants.TEAM_RED, delivered_before, 1),
+			"FGZ protects delivered stone %d" % [delivered_before + 1]
+		)
+	_expect(not CurlingRules.has_free_guard_violation(pre, post, CurlingConstants.TEAM_RED, 5, 1), "FGZ protection ends on sixth delivered stone")
+	var own_pre: Array[Dictionary] = [{"id": 0, "team": CurlingConstants.TEAM_RED, "position": guard, "in_play": true}]
+	var own_removed: Array[Dictionary] = [{"id": 0, "team": CurlingConstants.TEAM_RED, "position": guard, "in_play": false}]
+	_expect(not CurlingRules.has_free_guard_violation(own_pre, own_removed, CurlingConstants.TEAM_RED, 2, 1), "FGZ protects opponent guards only")
+	var moved_in_play: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": tee, "in_play": true}]
+	_expect(not CurlingRules.has_free_guard_violation(pre, moved_in_play, CurlingConstants.TEAM_RED, 2, 1), "FGZ guard may move if it stays in play")
+	var center_guard := Vector2((CurlingConstants.far_hog_x(1) + tee.x) * 0.5, 0.0)
+	var center_pre: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": center_guard, "in_play": true}]
+	var ticked_off_center: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": center_guard + Vector2(0.0, CurlingConstants.STONE_RADIUS_PX + 3.0), "in_play": true}]
+	var moved_on_center: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": center_guard + Vector2(12.0, 0.0), "in_play": true}]
+	_expect(CurlingRules.has_no_tick_violation(center_pre, ticked_off_center, CurlingConstants.TEAM_RED, 4, 1), "fifth-stone no-tick rollback")
+	_expect(not CurlingRules.has_no_tick_violation(center_pre, ticked_off_center, CurlingConstants.TEAM_RED, 5, 1), "no-tick protection ends on sixth delivered stone")
+	_expect(not CurlingRules.has_no_tick_violation(center_pre, moved_on_center, CurlingConstants.TEAM_RED, 2, 1), "center guard may move along center line inside FGZ")
 
 
 func _test_snapshot_codec() -> void:
@@ -220,6 +259,20 @@ func _test_match_alternation_and_overtime() -> void:
 	_expect(match_controller.direction == -initial_direction, "direction alternates after every End")
 	match_controller.queue_free()
 
+	var remote_controller := scene.instantiate() as CurlingMatchController
+	root.add_child(remote_controller)
+	remote_controller.start_match(players, 1, 2, false, 88)
+	var remote_tactics_time := remote_controller.phase_time_remaining
+	remote_controller._process(1.25)
+	_expect_close(remote_controller.phase_time_remaining, remote_tactics_time - 1.25, 0.01, "remote tactics timer ticks locally")
+	remote_controller.phase = CurlingMatchController.Phase.AIMING
+	remote_controller.phase_time_remaining = 60.0
+	remote_controller.active_thrower_id = 2
+	remote_controller.local_input_locked = true
+	remote_controller._process(2.0)
+	_expect_close(remote_controller.phase_time_remaining, 58.0, 0.01, "remote aiming timer ticks locally")
+	remote_controller.queue_free()
+
 
 func _test_settings_persistence() -> void:
 	var test_path := "user://curling_settings_test_%d.cfg" % Time.get_ticks_usec()
@@ -231,6 +284,7 @@ func _test_settings_persistence() -> void:
 	first.set_volume_percent(CurlingSettingsScript.CHANNEL_MASTER, 37)
 	first.set_volume_percent(CurlingSettingsScript.CHANNEL_SFX, 64)
 	first.set_reduced_motion_enabled(true)
+	first.set_player_nickname("测试冰壶手")
 	_expect(first.flush_pending_save() == OK, "settings file saves")
 	_expect(FileAccess.file_exists(test_path), "settings file exists after save")
 
@@ -242,6 +296,7 @@ func _test_settings_persistence() -> void:
 	_expect(second.get_volume_percent(CurlingSettingsScript.CHANNEL_MASTER) == 37, "master volume persists")
 	_expect(second.get_volume_percent(CurlingSettingsScript.CHANNEL_SFX) == 64, "SFX volume persists")
 	_expect(second.is_reduced_motion_enabled(), "reduced motion persists")
+	_expect(second.get_player_nickname() == "测试冰壶手", "confirmed player nickname persists with settings")
 	_expect(second.get_resolution_options().size() == 9, "Arc Nice resolution list is available")
 	_expect(second.reset_all_settings() == OK, "settings reset succeeds")
 	_expect(not FileAccess.file_exists(test_path), "settings reset removes local config")

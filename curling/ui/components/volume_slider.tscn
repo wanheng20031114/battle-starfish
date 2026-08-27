@@ -1,0 +1,68 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://curling/ui/components/volume_slider.gd" id="1_script"]
+
+[sub_resource type="StyleBoxEmpty" id="Slider_empty"]
+
+[sub_resource type="StyleBoxFlat" id="Progress_track"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+bg_color = Color(0.027, 0.2, 0.29, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.75, 0.53, 0.2, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+anti_aliasing = false
+
+[sub_resource type="StyleBoxFlat" id="Progress_fill"]
+bg_color = Color(0.19, 0.79, 0.75, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.93, 0.75, 0.31, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+anti_aliasing = false
+
+[node name="VolumeSlider" type="HSlider"]
+custom_minimum_size = Vector2(280, 49)
+scrollable = false
+max_value = 100.0
+step = 1.0
+value = 100.0
+theme_override_styles/grabber_area = SubResource("Slider_empty")
+theme_override_styles/grabber_area_highlight = SubResource("Slider_empty")
+theme_override_styles/slider = SubResource("Slider_empty")
+theme_override_styles/slider_focus = SubResource("Slider_empty")
+script = ExtResource("1_script")
+
+[node name="ProgressBar" type="ProgressBar" parent="."]
+show_behind_parent = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = 15.5
+offset_right = 0.0
+offset_bottom = -15.5
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+focus_mode = 0
+theme_override_styles/background = SubResource("Progress_track")
+theme_override_styles/fill = SubResource("Progress_fill")
+max_value = 100.0
+step = 1.0
+value = 100.0
+show_percentage = false

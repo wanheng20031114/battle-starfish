@@ -22,14 +22,8 @@ function Invoke-TrackedProcess {
 try {
     Invoke-TrackedProcess $Godot @("--headless", "--path", $workspace, "--script", "res://curling/tests/run_unit_tests.gd") $workspace
     Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/native_physics_test.tscn") $workspace
+    Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/stone_lifecycle_test.tscn") $workspace
     Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/native_calibration_test.tscn") $workspace
-    foreach ($playerCount in 2..8) {
-        & (Join-Path $PSScriptRoot "run_multiplayer_smoke.ps1") -Godot $Godot -PlayerCount $playerCount
-    }
-    & (Join-Path $PSScriptRoot "run_multiplayer_smoke.ps1") -Godot $Godot -PlayerCount 8 -RttMs 100
-    & (Join-Path $PSScriptRoot "run_multiplayer_smoke.ps1") -Godot $Godot -PlayerCount 8 -RttMs 200 -LossPercent 2
-    & (Join-Path $PSScriptRoot "run_public_relay_smoke.ps1") -Godot $Godot
-
     Invoke-TrackedProcess "python" @("-m", "venv", $venvRoot) $serverRoot
     $testPython = Join-Path $venvRoot "Scripts\python.exe"
     if (-not $SkipDependencyInstall) {

@@ -1,0 +1,265 @@
+{
+  "alpha_threshold_for_bounds": 32,
+  "resampling": "none; Godot applies linear filtering at display time",
+  "sources": {
+    "settings_icons": "assets/ui_pixel/source/settings_icons_atlas.png",
+    "frames": "assets/ui_pixel/source/ui_frames_atlas.png"
+  },
+  "settings_icons": {
+    "window": {
+      "source_cell": [
+        362,
+        0,
+        724,
+        362
+      ],
+      "subject_bbox": [
+        67,
+        108,
+        303,
+        320
+      ],
+      "crop_bbox": [
+        49,
+        90,
+        321,
+        338
+      ],
+      "output_size": [
+        272,
+        272
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    },
+    "fullscreen": {
+      "source_cell": [
+        724,
+        0,
+        1086,
+        362
+      ],
+      "subject_bbox": [
+        56,
+        102,
+        299,
+        327
+      ],
+      "crop_bbox": [
+        38,
+        84,
+        317,
+        345
+      ],
+      "output_size": [
+        279,
+        279
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    },
+    "speaker": {
+      "source_cell": [
+        1086,
+        0,
+        1448,
+        362
+      ],
+      "subject_bbox": [
+        48,
+        109,
+        303,
+        327
+      ],
+      "crop_bbox": [
+        30,
+        91,
+        321,
+        345
+      ],
+      "output_size": [
+        291,
+        291
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    },
+    "music": {
+      "source_cell": [
+        0,
+        362,
+        362,
+        724
+      ],
+      "subject_bbox": [
+        81,
+        50,
+        291,
+        278
+      ],
+      "crop_bbox": [
+        63,
+        32,
+        309,
+        296
+      ],
+      "output_size": [
+        264,
+        264
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    },
+    "accessibility": {
+      "source_cell": [
+        362,
+        362,
+        724,
+        724
+      ],
+      "subject_bbox": [
+        77,
+        54,
+        296,
+        279
+      ],
+      "crop_bbox": [
+        59,
+        36,
+        314,
+        297
+      ],
+      "output_size": [
+        261,
+        261
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    },
+    "back": {
+      "source_cell": [
+        724,
+        724,
+        1086,
+        1086
+      ],
+      "subject_bbox": [
+        75,
+        2,
+        275,
+        241
+      ],
+      "crop_bbox": [
+        57,
+        0,
+        293,
+        259
+      ],
+      "output_size": [
+        259,
+        259
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    },
+    "close": {
+      "source_cell": [
+        1086,
+        724,
+        1448,
+        1086
+      ],
+      "subject_bbox": [
+        76,
+        14,
+        282,
+        229
+      ],
+      "crop_bbox": [
+        58,
+        0,
+        300,
+        247
+      ],
+      "output_size": [
+        247,
+        247
+      ],
+      "display_size": [
+        40,
+        40
+      ]
+    }
+  },
+  "frames": {
+    "button_sandstone": {
+      "area": 71454,
+      "subject_bbox": [
+        20,
+        73,
+        490,
+        233
+      ],
+      "crop_bbox": [
+        10,
+        63,
+        500,
+        243
+      ],
+      "output_size": [
+        498,
+        188
+      ]
+    },
+    "button_aqua": {
+      "area": 77997,
+      "subject_bbox": [
+        526,
+        73,
+        1013,
+        237
+      ],
+      "crop_bbox": [
+        516,
+        63,
+        1023,
+        247
+      ],
+      "output_size": [
+        515,
+        192
+      ]
+    },
+    "section_aqua": {
+      "area": 141475,
+      "subject_bbox": [
+        25,
+        267,
+        741,
+        536
+      ],
+      "crop_bbox": [
+        15,
+        257,
+        751,
+        546
+      ],
+      "output_size": [
+        744,
+        297
+      ]
+    }
+  }
+}

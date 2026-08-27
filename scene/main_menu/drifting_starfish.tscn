@@ -67,11 +67,11 @@ animations = [{
 "speed": 5.555556
 }]
 
-[node name="DriftingStarfish" type="Node2D"]
+[node name="SeabedStarfish" type="Node2D"]
 script = ExtResource("1_script")
 
 [node name="Sprite" type="AnimatedSprite2D" parent="."]
-texture_filter = 1
+texture_filter = 2
 sprite_frames = SubResource("SpriteFrames_wiggle")
 animation = &"wiggle"
 autoplay = "wiggle"

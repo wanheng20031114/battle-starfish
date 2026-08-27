@@ -2,6 +2,8 @@ extends RefCounted
 class_name CurlingRules
 
 const SCORE_TIE_EPSILON_PX := 0.002 * CurlingConstants.PIXELS_PER_METER
+const FREE_GUARD_PROTECTED_STONES := 5
+const CENTER_LINE_HALF_WIDTH_PX := 0.013 * CurlingConstants.PIXELS_PER_METER * 0.5
 
 
 static func is_in_house(position: Vector2, direction: int) -> bool:
@@ -14,9 +16,14 @@ static func is_in_free_guard_zone(position: Vector2, direction: int) -> bool:
 		return false
 	var tee_x := CurlingConstants.tee_position(direction).x
 	var hog_x := CurlingConstants.far_hog_x(direction)
+	var stone_radius := CurlingConstants.STONE_RADIUS_PX
 	if direction > 0:
-		return position.x >= hog_x and position.x < tee_x
-	return position.x <= hog_x and position.x > tee_x
+		return position.x + stone_radius >= hog_x and position.x + stone_radius < tee_x
+	return position.x - stone_radius <= hog_x and position.x - stone_radius > tee_x
+
+
+static func is_touching_center_line(position: Vector2) -> bool:
+	return absf(position.y) <= CurlingConstants.STONE_RADIUS_PX + CENTER_LINE_HALF_WIDTH_PX
 
 
 static func is_out_of_play(position: Vector2, direction: int) -> bool:
@@ -80,17 +87,21 @@ static func has_free_guard_violation(
 	delivered_count_before_shot: int,
 	direction: int
 ) -> bool:
-	if delivered_count_before_shot >= 5:
+	if delivered_count_before_shot >= FREE_GUARD_PROTECTED_STONES:
 		return false
 	var opponent := CurlingConstants.other_team(delivered_team)
 	var post_by_id := {}
 	for stone in post_shot:
 		post_by_id[int(stone.get("id", -1))] = stone
 	for before in pre_shot:
+		var before_position_variant: Variant = before.get("position")
+		if not before_position_variant is Vector2:
+			continue
+		var before_position := before_position_variant as Vector2
 		if (
 			int(before.get("team", CurlingConstants.TEAM_NONE)) != opponent
 			or not bool(before.get("in_play", false))
-			or not is_in_free_guard_zone(before.get("position", Vector2.ZERO), direction)
+			or not is_in_free_guard_zone(before_position, direction)
 		):
 			continue
 		var after_variant: Variant = post_by_id.get(int(before.get("id", -1)))
@@ -101,3 +112,42 @@ static func has_free_guard_violation(
 			return true
 	return false
 
+
+static func has_no_tick_violation(
+	pre_shot: Array[Dictionary],
+	post_shot: Array[Dictionary],
+	delivered_team: int,
+	delivered_count_before_shot: int,
+	direction: int
+) -> bool:
+	if delivered_count_before_shot >= FREE_GUARD_PROTECTED_STONES:
+		return false
+	var opponent := CurlingConstants.other_team(delivered_team)
+	var post_by_id := {}
+	for stone in post_shot:
+		post_by_id[int(stone.get("id", -1))] = stone
+	for before in pre_shot:
+		var before_position_variant: Variant = before.get("position")
+		if not before_position_variant is Vector2:
+			continue
+		var before_position := before_position_variant as Vector2
+		if (
+			int(before.get("team", CurlingConstants.TEAM_NONE)) != opponent
+			or not bool(before.get("in_play", false))
+			or not is_in_free_guard_zone(before_position, direction)
+			or not is_touching_center_line(before_position)
+		):
+			continue
+		var after_variant: Variant = post_by_id.get(int(before.get("id", -1)))
+		if typeof(after_variant) != TYPE_DICTIONARY:
+			continue
+		var after: Dictionary = after_variant
+		if not bool(after.get("in_play", false)):
+			continue
+		var after_position_variant: Variant = after.get("position")
+		if not after_position_variant is Vector2:
+			continue
+		var after_position := after_position_variant as Vector2
+		if not is_in_free_guard_zone(after_position, direction) or not is_touching_center_line(after_position):
+			return true
+	return false
