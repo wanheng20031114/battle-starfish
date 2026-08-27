@@ -4,6 +4,16 @@
 /build/**
 !/build/.gdignore
 
+# Python 验证与服务端工具生成的本地缓存。
+__pycache__/
+*.py[cod]
+
+# 归档工程仅作本地参考，不进入主项目资源与版本库。
+/backup/**
+!/backup/.gdignore
+
+# UI 生成源图不参与 Godot 资源导入；运行时只使用 production 目录。
+/assets/ui_pixel/source/**/*.import
 
 # 根目录“参考用”仅存放本地参考资料；保留 Godot 忽略标记。
 /参考用/**

@@ -1,7 +1,7 @@
 extends Control
 
 const CURLING_SCENE := "res://curling/curling.tscn"
-const ARCHIVED_TEST_EXECUTABLE := "res://backup/3d-camera-demo/build/BattleStarfish.exe"
+const TEST_SCENE := "res://scene/test/test.tscn"
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
 const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
 const INTRO_BUTTON_OFFSET_Y := 52.0
@@ -128,18 +128,9 @@ func _animate_button(button: Button, target_scale: float) -> void:
 
 
 func _on_test_scene_pressed() -> void:
-	if OS.get_name() != "Windows":
-		_set_status("归档测试场景目前仅提供 Windows 可执行文件。", true)
-		return
-	var executable_path := ProjectSettings.globalize_path(ARCHIVED_TEST_EXECUTABLE)
-	if not FileAccess.file_exists(executable_path):
-		_set_status("未找到 backup 中的归档测试程序。", true)
-		return
-	var process_id := OS.create_process(executable_path, PackedStringArray())
-	if process_id <= 0:
-		_set_status("归档测试场景启动失败。", true)
-		return
-	_set_status("归档测试场景已在独立窗口启动。")
+	var error := get_tree().change_scene_to_file(TEST_SCENE)
+	if error != OK:
+		_set_status("测试场景载入失败：%s" % error_string(error), true)
 
 
 func _on_curling_pressed() -> void:

@@ -34,7 +34,7 @@ $env:CURLING_GODOT_BINARY = "C:\Program Files\Godot\Godot_console.exe"
 在目标机复制整个 `curling/server/` 后执行：
 
 ```bash
-sudo ./deploy/install.sh
+sudo bash ./deploy/install.sh
 ```
 
 安装脚本创建独立系统用户、`/opt/battle-starfish-curling`、Python 虚拟环境、密钥环境文件和 `curling-lobby.service`。它不会读取或修改 arc-nice 的运行时文件。云防火墙仍需人工放行 TCP `8010` 与 UDP `40201:40300`。
@@ -42,7 +42,7 @@ sudo ./deploy/install.sh
 卸载：
 
 ```bash
-sudo ./deploy/uninstall.sh
+sudo bash ./deploy/uninstall.sh
 ```
 
 日志进入 journald：`journalctl -u curling-lobby -f`。环境文件默认位于 `/etc/battle-starfish-curling.env`，权限为 `0640`。
