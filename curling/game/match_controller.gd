@@ -1089,6 +1089,7 @@ func _emit_hud() -> void:
 		"phase": phase,
 		"phase_name": get_phase_name(),
 		"time": phase_time_remaining,
+		"shot_id": shot_id,
 		"end": current_end + 1,
 		"scheduled_ends": scheduled_ends,
 		"delivered": delivered_count,

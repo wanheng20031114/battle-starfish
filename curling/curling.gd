@@ -4,6 +4,7 @@ class_name CurlingApp
 const SESSION_FILE := "user://curling_session.json"
 const MAIN_MENU_SCENE := "res://scene/main_menu/main_menu.tscn"
 const LEAVE_ACK_TIMEOUT_MS := 1500
+const SHOT_CLOCK_WARNING_SECONDS := [10, 5, 4, 3, 2, 1]
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
 const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
 const CurlingManualPanelScript := preload("res://curling/manual/curling_manual_panel.gd")
@@ -100,6 +101,8 @@ var _username_intro_tween: Tween
 var _current_screen := ""
 var _leaving_room := false
 var _leave_ack_deadline_ms := 0
+var _last_shot_clock_warning_shot_id := -1
+var _last_shot_clock_warning_second := -1
 
 
 func _ready() -> void:
@@ -775,6 +778,7 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 	power_bar.value = float(data.get("power", 0.0)) * 100.0
 	spin_label.text = "旋转 %+0.2f" % float(data.get("spin", 0.0))
 	var phase_value := int(data.get("phase", CurlingMatchController.Phase.IDLE))
+	_maybe_play_shot_clock_warning(data, phase_value)
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
 		CurlingMatchController.Phase.AIMING: instruction_label.text = "入垒参考 77% · Q/E调旋 · 滚轮/A D/← → 查看赛道"
@@ -782,6 +786,29 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 		CurlingMatchController.Phase.SCORING: instruction_label.text = "测量距离并计算本End得分"
 	_refresh_match_overlay_visibility(phase_value)
 	audio.set_sweeping(_current_screen == "match" and bool(data.get("sweeping", false)), 0.7)
+
+
+func _maybe_play_shot_clock_warning(data: Dictionary, phase_value: int) -> void:
+	var remaining := float(data.get("time", 0.0))
+	if _current_screen != "match" or phase_value != CurlingMatchController.Phase.AIMING or remaining <= 0.0:
+		_reset_shot_clock_warning()
+		return
+	var shot_id := int(data.get("shot_id", -1))
+	if shot_id != _last_shot_clock_warning_shot_id:
+		_last_shot_clock_warning_shot_id = shot_id
+		_last_shot_clock_warning_second = -1
+	var remaining_second := ceili(remaining)
+	if not SHOT_CLOCK_WARNING_SECONDS.has(remaining_second):
+		return
+	if remaining_second == _last_shot_clock_warning_second:
+		return
+	_last_shot_clock_warning_second = remaining_second
+	audio.play_countdown(remaining_second <= 5)
+
+
+func _reset_shot_clock_warning() -> void:
+	_last_shot_clock_warning_shot_id = -1
+	_last_shot_clock_warning_second = -1
 
 
 func _on_gameplay_event(event: Dictionary) -> void:

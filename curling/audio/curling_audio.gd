@@ -25,8 +25,8 @@ func play_launch() -> void:
 	ui_player.play()
 
 
-func play_countdown() -> void:
-	ui_player.pitch_scale = 1.45
+func play_countdown(urgent := false) -> void:
+	ui_player.pitch_scale = 1.75 if urgent else 1.35
 	ui_player.play()
 
 
@@ -109,4 +109,3 @@ func _make_noise(duration: float, looped: bool) -> AudioStreamWAV:
 		stream.loop_begin = 0
 		stream.loop_end = sample_count
 	return stream
-
