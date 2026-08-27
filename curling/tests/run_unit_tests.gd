@@ -40,7 +40,9 @@ func _test_dimensions_and_calibration() -> void:
 	var beginner_power := CurlingConstants.THROW_DRAW_POWER
 	var beginner_speed := CurlingConstants.throw_speed_for_power(beginner_power)
 	var beginner_draw := _integrate_calibration(beginner_speed, 0.0, 0.0)
-	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "75 percent beginner draw reaches tee")
+	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "75 percent no-sweep straight draw reaches tee")
+	var swept_beginner_draw := _integrate_calibration(beginner_speed, 0.0, 1.0)
+	_expect(float(swept_beginner_draw["forward"]) > draw_distance + 2.5, "75 percent full-sweep draw clearly passes tee")
 	var lower_step := beginner_speed - CurlingConstants.throw_speed_for_power(0.70)
 	var upper_step := CurlingConstants.throw_speed_for_power(0.80) - beginner_speed
 	_expect_close(lower_step, upper_step, 0.001, "throw power is linear around the 75 percent draw")

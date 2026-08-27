@@ -24,7 +24,6 @@ const OVERVIEW_CAMERA_ZOOM := 0.24
 const GAMEPLAY_CAMERA_ZOOM := 1.16
 const HOUSE_CAMERA_ZOOM := 1.12
 const CAMERA_PAN_SPEED_PXPS := 1100.0
-const CAMERA_WHEEL_STEP_PX := 320.0
 const CAMERA_X_LIMIT_PX := CurlingConstants.TEE_FROM_CENTER_PX + CurlingConstants.HACK_FROM_TEE_PX
 
 @onready var heat_grid: CurlingHeatGrid = $HeatGrid
@@ -266,18 +265,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
-		if (
-			mouse_event.pressed
-			and mouse_event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]
-			and phase not in [Phase.IDLE, Phase.MOVING]
-			and not _dragging
-		):
-			var wheel_direction := 1.0 if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-			_nudge_manual_camera(wheel_direction)
-			get_viewport().set_input_as_handled()
-			return
 		if phase == Phase.AIMING and active_thrower_id == local_player_id:
-			if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			if mouse_event.pressed and mouse_event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+				var wheel_direction := 1.0 if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
+				_adjust_spin(wheel_direction * CurlingConstants.SPIN_WHEEL_STEP_RADPS)
+				get_viewport().set_input_as_handled()
+				return
+			elif mouse_event.button_index == MOUSE_BUTTON_LEFT:
 				if mouse_event.pressed and _can_begin_drag():
 					_dragging = true
 					_drag_origin_screen = mouse_event.position
@@ -990,9 +984,17 @@ func _update_spin_from_keys(delta: float) -> void:
 	if Input.is_key_pressed(KEY_E):
 		input_axis += 1.0
 	if not is_zero_approx(input_axis):
-		_current_spin = clampf(_current_spin + input_axis * CurlingConstants.SPIN_KEY_RATE_RADPS * delta, -CurlingConstants.MAX_SPIN_RADPS, CurlingConstants.MAX_SPIN_RADPS)
-		if _dragging:
-			_refresh_local_aim_preview()
+		_adjust_spin(input_axis * CurlingConstants.SPIN_KEY_RATE_RADPS * delta)
+
+
+func _adjust_spin(delta_spin: float) -> void:
+	_current_spin = clampf(
+		_current_spin + delta_spin,
+		-CurlingConstants.MAX_SPIN_RADPS,
+		CurlingConstants.MAX_SPIN_RADPS
+	)
+	if _dragging:
+		_refresh_local_aim_preview()
 
 
 func _camera_key_direction(event: InputEventKey) -> int:
@@ -1001,15 +1003,6 @@ func _camera_key_direction(event: InputEventKey) -> int:
 	if event.keycode in [KEY_RIGHT, KEY_D] or event.physical_keycode in [KEY_RIGHT, KEY_D]:
 		return 1
 	return 0
-
-
-func _nudge_manual_camera(wheel_direction: float) -> void:
-	_sync_camera_phase_anchor()
-	_manual_camera_x = clampf(
-		_manual_camera_x + wheel_direction * float(direction) * CAMERA_WHEEL_STEP_PX,
-		-CAMERA_X_LIMIT_PX,
-		CAMERA_X_LIMIT_PX
-	)
 
 
 func _sync_camera_phase_anchor() -> void:

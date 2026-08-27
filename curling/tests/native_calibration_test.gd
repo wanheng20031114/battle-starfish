@@ -31,11 +31,10 @@ func _ready() -> void:
 	_last_cold_position = _cold_start
 	_last_no_spin_position = _no_spin_start
 	await get_tree().physics_frame
-	var draw_distance := 2.0 * CurlingConstants.TEE_FROM_CENTER_M + CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
-	var standard_speed := draw_distance / 22.0 + 0.5 * CurlingConstants.BASE_DRAG_MPS2 * 22.0
-	cold_stone.launch(Vector2.RIGHT, standard_speed, CurlingConstants.MAX_SPIN_RADPS)
-	swept_stone.launch(Vector2.RIGHT, standard_speed, CurlingConstants.MAX_SPIN_RADPS)
-	no_spin_stone.launch(Vector2.RIGHT, standard_speed, 0.0)
+	var draw_speed := CurlingConstants.throw_speed_for_power(CurlingConstants.THROW_DRAW_POWER)
+	cold_stone.launch(Vector2.RIGHT, draw_speed, CurlingConstants.MAX_SPIN_RADPS)
+	swept_stone.launch(Vector2.RIGHT, draw_speed, CurlingConstants.MAX_SPIN_RADPS)
+	no_spin_stone.launch(Vector2.RIGHT, draw_speed, 0.0)
 	_running = true
 
 
@@ -67,7 +66,7 @@ func _finish() -> void:
 	var swept_delta := swept_stone.global_position - _swept_start
 	var no_spin_delta := no_spin_stone.global_position - _no_spin_start
 	_check(absf(_cold_stop_time - 22.0) <= 0.8, "native draw stop time %.3fs" % _cold_stop_time)
-	_check(absf(no_spin_delta.x / CurlingConstants.PIXELS_PER_METER - 36.58) <= 0.8, "native draw distance %.3fm" % (no_spin_delta.x / CurlingConstants.PIXELS_PER_METER))
+	_check(absf(no_spin_delta.x / CurlingConstants.PIXELS_PER_METER - 36.58) <= 0.25, "native 75 percent no-sweep draw distance %.3fm" % (no_spin_delta.x / CurlingConstants.PIXELS_PER_METER))
 	_check(absf(_cold_stop_time - _no_spin_stop_time) <= 0.05, "native spin preserves stop time %.3fs vs %.3fs" % [_cold_stop_time, _no_spin_stop_time])
 	_check(absf((_cold_path_px - _no_spin_path_px) / CurlingConstants.PIXELS_PER_METER) <= 0.05, "native spin preserves slide distance %.3fm vs %.3fm" % [_cold_path_px / CurlingConstants.PIXELS_PER_METER, _no_spin_path_px / CurlingConstants.PIXELS_PER_METER])
 	_check(absf(absf(cold_delta.y / CurlingConstants.PIXELS_PER_METER) - 1.5) <= 0.20, "native curl %.3fm" % (cold_delta.y / CurlingConstants.PIXELS_PER_METER))
@@ -76,7 +75,7 @@ func _finish() -> void:
 	var curl_reduction := 1.0 - absf((swept_delta.y) / (cold_delta.y))
 	_check(absf(curl_reduction - 0.35) <= 0.06, "native swept curl reduction %.1f%%" % (curl_reduction * 100.0))
 	if _failures.is_empty():
-		print("CURLING_NATIVE_CALIBRATION_OK draw=%.2fs distance=%.2fm curl=%.2fm swept_extra=%.2fm" % [_cold_stop_time, cold_delta.x / 100.0, cold_delta.y / 100.0, (swept_delta.x - cold_delta.x) / 100.0])
+		print("CURLING_NATIVE_CALIBRATION_OK no_sweep_75=%.2fm draw=%.2fs curl=%.2fm full_sweep_75_extra=%.2fm" % [no_spin_delta.x / 100.0, _cold_stop_time, cold_delta.y / 100.0, (swept_delta.x - cold_delta.x) / 100.0])
 		get_tree().quit(0)
 	else:
 		for failure in _failures:

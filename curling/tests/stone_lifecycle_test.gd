@@ -208,11 +208,6 @@ func _test_camera_modes() -> void:
 	controller.start_match(_players(), 1, 1, true, 55667)
 	controller.reduced_motion = true
 	controller._process_camera(0.0)
-	var initial_x := controller.game_camera.position.x
-	controller._nudge_manual_camera(1.0)
-	controller._process_camera(0.0)
-	if (controller.game_camera.position.x - initial_x) * float(controller.direction) <= 10.0:
-		_failures.append("mouse wheel moves the manual camera toward the target end")
 	var left_key := InputEventKey.new()
 	left_key.keycode = KEY_A
 	if controller._camera_key_direction(left_key) != -1:
@@ -228,6 +223,21 @@ func _test_camera_modes() -> void:
 
 	controller._force_lock_all_teams()
 	await get_tree().physics_frame
+	var camera_x_before_wheel := controller._manual_camera_x
+	var wheel_up := InputEventMouseButton.new()
+	wheel_up.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel_up.pressed = true
+	controller._unhandled_input(wheel_up)
+	if not is_equal_approx(controller._current_spin, CurlingConstants.SPIN_WHEEL_STEP_RADPS):
+		_failures.append("mouse wheel up increases throw spin by one step")
+	if not is_equal_approx(controller._manual_camera_x, camera_x_before_wheel):
+		_failures.append("mouse wheel no longer moves the manual camera")
+	var wheel_down := InputEventMouseButton.new()
+	wheel_down.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	wheel_down.pressed = true
+	controller._unhandled_input(wheel_down)
+	if not is_zero_approx(controller._current_spin):
+		_failures.append("mouse wheel down decreases throw spin by one step")
 	var moving_stone := _stones()[controller.active_stone_id]
 	controller.host_apply_throw(controller.active_thrower_id, _throw_direction(), 0.77, 0.0)
 	await get_tree().physics_frame
