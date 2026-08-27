@@ -890,15 +890,16 @@ size_flags_horizontal = 3
 text = "从壶向后拖拽"
 
 [node name="Power" type="ProgressBar" parent="UI/MatchHUD/BottomBar"]
-custom_minimum_size = Vector2(270, 22)
+custom_minimum_size = Vector2(220, 22)
 layout_mode = 2
 max_value = 100.0
 show_percentage = true
 
 [node name="Spin" type="Label" parent="UI/MatchHUD/BottomBar"]
 layout_mode = 2
-custom_minimum_size = Vector2(110, 0)
-text = "旋转 +0.00"
+custom_minimum_size = Vector2(300, 0)
+theme_override_font_sizes/font_size = 16
+text = "力0.00% · 向+0.00° · 旋+0.00rad/s"
 
 [node name="ResultScreen" type="Control" parent="UI"]
 visible = false

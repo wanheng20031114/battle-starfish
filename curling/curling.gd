@@ -776,12 +776,16 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 	active_label.text = "%s · %s" % [str(data.get("phase_name", "")), str(data.get("active_player", ""))]
 	team_status_label.text = "后手 %s  ·  本手 %s\n已投 %d / 16" % [CurlingConstants.team_name(int(data.get("hammer_team", 0))), CurlingConstants.team_name(int(data.get("active_team", 0))), int(data.get("delivered", 0))]
 	power_bar.value = float(data.get("power", 0.0)) * 100.0
-	spin_label.text = "旋转 %+0.2f" % float(data.get("spin", 0.0))
+	spin_label.text = "力%.2f%% · 向%+0.02f° · 旋%+0.2frad/s" % [
+		float(data.get("power", 0.0)) * 100.0,
+		float(data.get("aim_offset_degrees", 0.0)),
+		float(data.get("spin", 0.0)),
+	]
 	var phase_value := int(data.get("phase", CurlingMatchController.Phase.IDLE))
 	_maybe_play_shot_clock_warning(data, phase_value)
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
-		CurlingMatchController.Phase.AIMING: instruction_label.text = "入垒推荐 %d%%（直线·零旋转·不刷冰） · Q/E或滚轮调旋" % roundi(CurlingConstants.THROW_RECOMMENDED_POWER * 100.0)
+		CurlingMatchController.Phase.AIMING: instruction_label.text = "推荐%d%% · 拖拽时 A/D方向 · W/S力度 · Shift慢调" % roundi(CurlingConstants.THROW_RECOMMENDED_POWER * 100.0)
 		CurlingMatchController.Phase.MOVING: instruction_label.text = "镜头自动跟壶 · 壶上方显示预计剩余时间 · 左键快速擦冰"
 		CurlingMatchController.Phase.SCORING: instruction_label.text = "测量距离并计算本End得分"
 	_refresh_match_overlay_visibility(phase_value)

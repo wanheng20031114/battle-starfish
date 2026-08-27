@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_lineup_allocation()
 	_test_rules()
 	_test_snapshot_codec()
+	_test_throw_input_precision()
 	_test_heat_grid()
 	_test_match_alternation_and_overtime()
 	_test_settings_persistence()
@@ -88,7 +89,7 @@ func _test_dimensions_and_calibration() -> void:
 	_expect_close(float(cold["time"]), 22.0, 0.35, "22 second draw")
 	_expect_close(float(straight["forward"]), draw_distance, 0.35, "draw reaches far tee")
 	_expect_close(float(cold["path"]), float(straight["path"]), 0.02, "spin preserves slide distance")
-	_expect_close(absf(float(cold["lateral"])), 1.5, 0.12, "maximum curl")
+	_expect_close(absf(float(cold["lateral"])), 2.49, 0.15, "expanded maximum curl")
 	_expect_close(float(swept["forward"]) - float(cold["forward"]), 3.0, 0.40, "full heat adds about 3m")
 	var curl_reduction := 1.0 - absf(float(swept["lateral"]) / float(cold["lateral"]))
 	_expect_close(curl_reduction, 0.35, 0.04, "full heat reduces final curl about 35 percent")
@@ -276,6 +277,102 @@ func _test_snapshot_codec() -> void:
 	var invalid_masks := payload.duplicate()
 	invalid_masks[10] = invalid_masks[10] | 0x10
 	_expect(not bool(CurlingStoneSnapshotCodec.decode_snapshot(invalid_masks).get("valid", true)), "moving stone outside in-play mask rejected")
+
+
+func _test_throw_input_precision() -> void:
+	_expect_close(CurlingConstants.MAX_SPIN_RADPS, 2.0, 0.0001, "expanded spin limit")
+	var exact_direction := Vector2.RIGHT.rotated(deg_to_rad(0.0123456789))
+	var exact_power := 0.77123456789
+	var exact_spin := CurlingConstants.MAX_SPIN_RADPS - 0.000123456
+	var encoded := CurlingNet.encode_message({
+		"type": "throw",
+		"direction": exact_direction,
+		"power": exact_power,
+		"spin": exact_spin,
+	})
+	var decoded := CurlingNet.decode_message(encoded)
+	_expect(str(decoded.get("type", "")) == "throw", "member throw message round trip")
+	_expect(
+		(decoded.get("direction", Vector2.ZERO) as Vector2).distance_to(exact_direction) <= 0.000000000001,
+		"member throw direction keeps native Vector2 precision",
+	)
+	_expect_close(float(decoded.get("power", 0.0)), exact_power, 0.000000000001, "member throw power keeps double precision")
+	_expect_close(float(decoded.get("spin", 0.0)), exact_spin, 0.000000000001, "member throw spin keeps double precision")
+
+	var scene := load("res://curling/game/match_controller.tscn") as PackedScene
+	var controller := scene.instantiate() as CurlingMatchController
+	root.add_child(controller)
+	var players: Array[Dictionary] = [
+		{"id": 1, "nickname": "Host", "team": CurlingConstants.TEAM_RED, "join_order": 0, "connected": true, "bot": false},
+		{"id": 2, "nickname": "Member", "team": CurlingConstants.TEAM_BLUE, "join_order": 1, "connected": true, "bot": false},
+	]
+	controller.start_match(players, 1, 1, true, 99117)
+	controller.direction = 1
+	controller._force_lock_all_teams()
+	controller._dragging = true
+	controller._drag_aim_direction = Vector2.RIGHT
+	controller._drag_power_adjustment = 0.0
+	var max_drag := minf(controller.get_viewport_rect().size.x, controller.get_viewport_rect().size.y) / 3.0
+	controller._drag_origin_screen = Vector2.ZERO
+	controller._drag_current_screen = Vector2(8.0 + 0.77 * (max_drag - 8.0), 0.0)
+	controller._adjust_drag_aim_degrees(0.01)
+	controller._adjust_drag_power(0.0001)
+	_expect_close(controller._current_aim_offset_degrees(), 0.01, 0.000001, "keyboard aim adjustment is finer than one mouse pixel")
+	_expect_close(controller._current_drag_power(), 0.7701, 0.000001, "keyboard power adjustment preserves sub-percent precision")
+	controller._cancel_drag()
+	var precision_key := InputEventKey.new()
+	precision_key.keycode = KEY_A
+	_expect(controller._is_drag_precision_key(precision_key), "A key is reserved for aim precision while dragging")
+
+	var member_intent: Dictionary = {}
+	controller.throw_intent.connect(func(direction: Vector2, power: float, spin: float) -> void:
+		member_intent["direction"] = direction
+		member_intent["power"] = power
+		member_intent["spin"] = spin
+	)
+	controller.authoritative = false
+	controller.phase = CurlingMatchController.Phase.AIMING
+	controller.local_player_id = 2
+	controller.active_thrower_id = 2
+	controller._dragging = true
+	controller._drag_origin_screen = Vector2.ZERO
+	controller._drag_current_screen = Vector2(8.0 + exact_power * (max_drag - 8.0), 0.0)
+	controller._drag_power_adjustment = 0.0
+	controller._drag_aim_direction = exact_direction
+	controller._current_spin = exact_spin
+	controller._release_local_throw()
+	_expect(not member_intent.is_empty(), "member release emits a throw intent")
+	_expect((member_intent.get("direction", Vector2.ZERO) as Vector2).distance_to(exact_direction) <= 0.000000000001, "member release keeps fine aim direction")
+	_expect_close(float(member_intent.get("power", 0.0)), exact_power, 0.0000001, "member release keeps fine power")
+	_expect_close(float(member_intent.get("spin", 0.0)), exact_spin, 0.000000000001, "member release keeps expanded spin")
+
+	controller.start_match(players, 1, 1, true, 99117)
+	controller.direction = 1
+	controller._force_lock_all_teams()
+	controller.active_thrower_id = 1
+	_expect(controller.host_apply_throw(1, exact_direction, exact_power, exact_spin), "host local throw is accepted")
+	var host_stone: CurlingStone = controller._stones[controller.active_stone_id]
+	var host_velocity := host_stone.linear_velocity
+	var host_spin := host_stone.angular_velocity
+
+	controller.start_match(players, 1, 1, true, 99117)
+	controller.direction = 1
+	controller._force_lock_all_teams()
+	controller.active_thrower_id = 2
+	var member_direction := decoded.get("direction", Vector2.ZERO) as Vector2
+	var member_power := float(decoded.get("power", 0.0))
+	var member_spin := float(decoded.get("spin", 0.0))
+	_expect(controller.host_apply_throw(2, member_direction, member_power, member_spin), "member network throw is accepted by host")
+	var member_stone: CurlingStone = controller._stones[controller.active_stone_id]
+	_expect(member_stone.linear_velocity.distance_to(host_velocity) <= 0.000001, "host and member throws create identical initial velocity")
+	_expect_close(member_stone.angular_velocity, host_spin, 0.000001, "host and member throws create identical angular velocity")
+	_expect_close(
+		member_stone.linear_velocity.length() / CurlingConstants.PIXELS_PER_METER,
+		CurlingConstants.throw_speed_for_power(exact_power),
+		0.000001,
+		"member power maps to the configured authoritative speed",
+	)
+	controller.queue_free()
 
 
 func _test_heat_grid() -> void:

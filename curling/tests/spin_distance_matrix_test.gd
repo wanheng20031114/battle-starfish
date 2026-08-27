@@ -1,7 +1,7 @@
 extends Node
 
 const TEST_POWERS := [0.65, 0.75, 0.85]
-const TEST_SPINS := [0.0, -0.6, 0.6, -1.2, 1.2]
+const TEST_SPINS := [0.0, -0.6, 0.6, -1.2, 1.2, -2.0, 2.0]
 const TEST_DIRECTIONS := [-1, 1]
 const REFERENCE_POWERS := [0.74, 0.76, 0.77, 0.78, 0.79]
 const MAX_SIMULATION_FRAMES := 2100
@@ -20,6 +20,9 @@ var _max_time_delta_sec := 0.0
 var _max_path_delta_m := 0.0
 var _max_speed_profile_delta_mps := 0.0
 var _max_forward_loss_m := 0.0
+var _max_repeat_time_spread_sec := 0.0
+var _max_repeat_path_spread_m := 0.0
+var _max_repeat_endpoint_spread_m := 0.0
 
 
 func _ready() -> void:
@@ -36,6 +39,7 @@ func _ready() -> void:
 			for spin in TEST_SPINS:
 				var result := await _run_case(float(power), int(direction), float(spin))
 				_cases[_case_key(float(power), int(direction), float(spin))] = result
+				_check_repeat_stability(float(power), int(direction), float(spin), result)
 				if not is_zero_approx(float(spin)):
 					_compare_with_no_spin(float(power), int(direction), float(spin), result)
 				if is_equal_approx(float(power), CurlingConstants.THROW_TEE_POWER):
@@ -46,6 +50,7 @@ func _ready() -> void:
 		for direction in TEST_DIRECTIONS:
 			var result := await _run_case(float(power), int(direction), 0.0)
 			_cases[_case_key(float(power), int(direction), 0.0)] = result
+			_check_repeat_stability(float(power), int(direction), 0.0, result)
 			if int(direction) == 1:
 				print(_draw_reference_summary(float(power), result))
 
@@ -171,6 +176,54 @@ func _compare_with_no_spin(power: float, direction: int, spin: float, result: Di
 				break
 
 
+func _check_repeat_stability(power: float, direction: int, spin: float, result: Dictionary) -> void:
+	var records: Array = result.get("records", [])
+	var min_time := INF
+	var max_time := -INF
+	var min_path := INF
+	var max_path := -INF
+	var min_forward := INF
+	var max_forward := -INF
+	var min_lateral := INF
+	var max_lateral := -INF
+	var record_count := 0
+	for record_variant in records:
+		var record: Dictionary = record_variant
+		if record.is_empty():
+			continue
+		var time_sec := float(record["time_sec"])
+		var path_m := float(record["path_m"])
+		var forward_m := float(record["forward_m"])
+		var lateral_m := float(record["lateral_m"])
+		min_time = minf(min_time, time_sec)
+		max_time = maxf(max_time, time_sec)
+		min_path = minf(min_path, path_m)
+		max_path = maxf(max_path, path_m)
+		min_forward = minf(min_forward, forward_m)
+		max_forward = maxf(max_forward, forward_m)
+		min_lateral = minf(min_lateral, lateral_m)
+		max_lateral = maxf(max_lateral, lateral_m)
+		record_count += 1
+	if record_count != _stones.size():
+		_failures.append(
+			"power %.2f direction %d spin %.2f produced %d/%d repeat records"
+			% [power, direction, spin, record_count, _stones.size()]
+		)
+		return
+	var time_spread := max_time - min_time
+	var path_spread := max_path - min_path
+	var endpoint_spread := maxf(max_forward - min_forward, max_lateral - min_lateral)
+	_max_repeat_time_spread_sec = maxf(_max_repeat_time_spread_sec, time_spread)
+	_max_repeat_path_spread_m = maxf(_max_repeat_path_spread_m, path_spread)
+	_max_repeat_endpoint_spread_m = maxf(_max_repeat_endpoint_spread_m, endpoint_spread)
+	if time_spread > 0.0001:
+		_failures.append("same-input stop time spread is %.6fs" % time_spread)
+	if path_spread > 0.002:
+		_failures.append("same-input path spread is %.6fm" % path_spread)
+	if endpoint_spread > 0.002:
+		_failures.append("same-input endpoint spread is %.6fm" % endpoint_spread)
+
+
 func _check_direction_symmetry() -> void:
 	for power in TEST_POWERS:
 		for spin in TEST_SPINS:
@@ -192,7 +245,7 @@ func _check_direction_symmetry() -> void:
 func _check_spin_symmetry() -> void:
 	for power in TEST_POWERS:
 		for direction in TEST_DIRECTIONS:
-			for spin_magnitude in [0.6, 1.2]:
+			for spin_magnitude in [0.6, 1.2, CurlingConstants.MAX_SPIN_RADPS]:
 				var negative: Dictionary = _cases[_case_key(float(power), int(direction), -float(spin_magnitude))]
 				var positive: Dictionary = _cases[_case_key(float(power), int(direction), float(spin_magnitude))]
 				var negative_records: Array = negative["records"]
@@ -250,7 +303,7 @@ func _equivalent_power_points() -> float:
 		var lower: Dictionary = _cases[_case_key(0.74, int(direction), 0.0)]
 		var upper: Dictionary = _cases[_case_key(0.76, int(direction), 0.0)]
 		var baseline: Dictionary = _cases[_case_key(0.75, int(direction), 0.0)]
-		for spin in [-1.2, 1.2]:
+		for spin in [-1.2, 1.2, -CurlingConstants.MAX_SPIN_RADPS, CurlingConstants.MAX_SPIN_RADPS]:
 			var spun: Dictionary = _cases[_case_key(0.75, int(direction), float(spin))]
 			for index in range(_stones.size()):
 				var lower_record: Dictionary = (lower["records"] as Array)[index]
@@ -329,7 +382,7 @@ func _finish() -> void:
 	var equivalent_power_points := _equivalent_power_points() if not _cases.is_empty() else 0.0
 	if _failures.is_empty():
 		print(
-			"CURLING_SPIN_DISTANCE_MATRIX_OK launches=%d stones=%d max_time_delta=%.4fs max_path_delta=%.4fm max_speed_delta=%.5fm/s max_forward_loss=%.4fm equivalent_power=%.3fpp"
+			"CURLING_SPIN_DISTANCE_MATRIX_OK launches=%d stones=%d max_time_delta=%.4fs max_path_delta=%.4fm max_speed_delta=%.5fm/s max_forward_loss=%.4fm equivalent_power=%.3fpp repeat_time_spread=%.6fs repeat_path_spread=%.6fm repeat_endpoint_spread=%.6fm"
 			% [
 				_total_launches,
 				_stones.size(),
@@ -338,6 +391,9 @@ func _finish() -> void:
 				_max_speed_profile_delta_mps,
 				_max_forward_loss_m,
 				equivalent_power_points,
+				_max_repeat_time_spread_sec,
+				_max_repeat_path_spread_m,
+				_max_repeat_endpoint_spread_m,
 			]
 		)
 		get_tree().quit(0)

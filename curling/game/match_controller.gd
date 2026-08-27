@@ -73,6 +73,8 @@ var _last_aim_preview_ms := 0
 var _dragging := false
 var _drag_origin_screen := Vector2.ZERO
 var _drag_current_screen := Vector2.ZERO
+var _drag_aim_direction := Vector2.RIGHT
+var _drag_power_adjustment := 0.0
 var _current_spin := 0.0
 var _sweep_down := false
 var _last_sweep_world := Vector2.ZERO
@@ -163,6 +165,8 @@ func _reset_transient_match_state() -> void:
 	_snapshot_accumulator = 0.0
 	_last_aim_preview_ms = 0
 	_dragging = false
+	_drag_aim_direction = Vector2.RIGHT
+	_drag_power_adjustment = 0.0
 	_current_spin = 0.0
 	_sweep_down = false
 	_last_sweep_world = Vector2.ZERO
@@ -205,6 +209,7 @@ func _process(delta: float) -> void:
 	if not authoritative:
 		_process_remote_phase_timer(delta)
 		if phase == Phase.AIMING and not local_input_locked:
+			_update_drag_precision_from_keys(delta)
 			_update_spin_from_keys(delta)
 		_emit_hud()
 		return
@@ -219,6 +224,7 @@ func _process(delta: float) -> void:
 		Phase.AIMING:
 			phase_time_remaining = maxf(0.0, phase_time_remaining - delta)
 			if not local_input_locked:
+				_update_drag_precision_from_keys(delta)
 				_update_spin_from_keys(delta)
 			_bot_delay -= delta
 			if _is_bot(active_thrower_id) and _bot_delay <= 0.0:
@@ -276,9 +282,15 @@ func _unhandled_input(event: InputEvent) -> void:
 					_dragging = true
 					_drag_origin_screen = mouse_event.position
 					_drag_current_screen = mouse_event.position
+					_drag_aim_direction = Vector2(float(direction), 0.0)
+					_drag_power_adjustment = 0.0
+					_camera_left_held = false
+					_camera_right_held = false
 					get_viewport().set_input_as_handled()
 				elif not mouse_event.pressed and _dragging:
-					_drag_current_screen = mouse_event.position
+					if not mouse_event.position.is_equal_approx(_drag_current_screen):
+						_drag_current_screen = mouse_event.position
+						_update_drag_aim_from_pointer()
 					_release_local_throw()
 					get_viewport().set_input_as_handled()
 			elif mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_RIGHT:
@@ -291,11 +303,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		var motion := event as InputEventMouseMotion
 		if phase == Phase.AIMING and _dragging:
 			_drag_current_screen = motion.position
+			_update_drag_aim_from_pointer()
 			_refresh_local_aim_preview()
 		elif phase == Phase.MOVING and _sweep_down and _local_team() == active_team:
 			_submit_sweep_motion(get_global_mouse_position())
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
+		if _dragging and phase == Phase.AIMING and active_thrower_id == local_player_id and _is_drag_precision_key(key_event):
+			_camera_left_held = false
+			_camera_right_held = false
+			get_viewport().set_input_as_handled()
+			return
 		var camera_direction := _camera_key_direction(key_event)
 		if camera_direction != 0:
 			if camera_direction < 0:
@@ -737,6 +755,8 @@ func _begin_next_throw() -> void:
 	phase_time_remaining = CurlingConstants.AIM_TIME_SEC
 	_current_spin = 0.0
 	_dragging = false
+	_drag_aim_direction = Vector2(float(direction), 0.0)
+	_drag_power_adjustment = 0.0
 	_active_touched_other = false
 	trajectory.visible = false
 	_bot_delay = 0.9 + _rng.randf_range(0.0, 0.7)
@@ -883,14 +903,12 @@ func _can_begin_drag() -> bool:
 func _refresh_local_aim_preview() -> void:
 	if not _dragging or active_stone_id < 0:
 		return
-	var active_position := _stones[active_stone_id].global_position
-	var world_direction := get_global_mouse_position().direction_to(active_position)
 	var power := _current_drag_power()
-	show_aim_preview(world_direction, power, _current_spin)
+	show_aim_preview(_drag_aim_direction, power, _current_spin)
 	var now_ms := Time.get_ticks_msec()
 	if now_ms - _last_aim_preview_ms >= roundi(1000.0 / CurlingConstants.AIM_PREVIEW_HZ):
 		_last_aim_preview_ms = now_ms
-		aim_preview_intent.emit(world_direction, power, _current_spin)
+		aim_preview_intent.emit(_drag_aim_direction, power, _current_spin)
 
 
 func show_aim_preview(aim_direction: Vector2, power: float, spin: float) -> void:
@@ -904,8 +922,7 @@ func show_aim_preview(aim_direction: Vector2, power: float, spin: float) -> void
 
 func _release_local_throw() -> void:
 	var power := _current_drag_power()
-	var active_position := _stones[active_stone_id].global_position
-	var aim_direction := get_global_mouse_position().direction_to(active_position)
+	var aim_direction := _drag_aim_direction
 	_dragging = false
 	if power <= 0.0 or aim_direction.length_squared() < 0.9:
 		trajectory.visible = false
@@ -918,15 +935,86 @@ func _release_local_throw() -> void:
 
 func _cancel_drag() -> void:
 	_dragging = false
+	_drag_power_adjustment = 0.0
 	trajectory.visible = false
 
 
 func _current_drag_power() -> float:
+	return clampf(_raw_drag_power() + _drag_power_adjustment, 0.0, 1.0)
+
+
+func _raw_drag_power() -> float:
 	var max_drag := minf(get_viewport_rect().size.x, get_viewport_rect().size.y) / 3.0
 	var drag_distance := _drag_origin_screen.distance_to(_drag_current_screen)
 	if drag_distance < 8.0:
 		return 0.0
 	return clampf((drag_distance - 8.0) / maxf(1.0, max_drag - 8.0), 0.0, 1.0)
+
+
+func _update_drag_aim_from_pointer() -> void:
+	if active_stone_id < 0:
+		return
+	var active_position := _stones[active_stone_id].global_position
+	var pointer_direction := get_global_mouse_position().direction_to(active_position)
+	if pointer_direction.length_squared() >= 0.9:
+		_drag_aim_direction = pointer_direction.normalized()
+
+
+func _update_drag_precision_from_keys(delta: float) -> void:
+	if not _dragging or active_thrower_id != local_player_id:
+		return
+	var aim_axis := 0.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		aim_axis -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		aim_axis += 1.0
+	var power_axis := 0.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		power_axis += 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		power_axis -= 1.0
+	var precision_multiplier := (
+		CurlingConstants.THROW_FINE_ADJUST_MULTIPLIER
+		if Input.is_key_pressed(KEY_SHIFT)
+		else 1.0
+	)
+	if not is_zero_approx(aim_axis):
+		_adjust_drag_aim_degrees(
+			aim_axis * CurlingConstants.AIM_KEY_RATE_DEGPS * precision_multiplier * delta
+		)
+	if not is_zero_approx(power_axis):
+		_adjust_drag_power(
+			power_axis * CurlingConstants.POWER_KEY_RATE_PER_SEC * precision_multiplier * delta
+		)
+
+
+func _adjust_drag_aim_degrees(delta_degrees: float) -> void:
+	if not _dragging or _drag_aim_direction.length_squared() < 0.9:
+		return
+	_drag_aim_direction = _drag_aim_direction.normalized().rotated(deg_to_rad(delta_degrees))
+	_refresh_local_aim_preview()
+
+
+func _adjust_drag_power(delta_power: float) -> void:
+	if not _dragging:
+		return
+	var raw_power := _raw_drag_power()
+	var adjusted_power := clampf(raw_power + _drag_power_adjustment + delta_power, 0.0, 1.0)
+	_drag_power_adjustment = adjusted_power - raw_power
+	_refresh_local_aim_preview()
+
+
+func _current_aim_offset_degrees() -> float:
+	if not _dragging or _drag_aim_direction.length_squared() < 0.9:
+		return 0.0
+	return rad_to_deg(Vector2(float(direction), 0.0).angle_to(_drag_aim_direction.normalized()))
+
+
+func _is_drag_precision_key(event: InputEventKey) -> bool:
+	return (
+		event.keycode in [KEY_A, KEY_D, KEY_W, KEY_S, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]
+		or event.physical_keycode in [KEY_A, KEY_D, KEY_W, KEY_S, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]
+	)
 
 
 func _predict_path(start: Vector2, aim_direction: Vector2, power: float, spin: float) -> PackedVector2Array:
@@ -1101,5 +1189,6 @@ func _emit_hud() -> void:
 		"active_player_id": active_thrower_id,
 		"spin": _current_spin,
 		"power": _current_drag_power() if _dragging else 0.0,
+		"aim_offset_degrees": _current_aim_offset_degrees(),
 		"sweeping": _sweep_down and phase == Phase.MOVING,
 	})
