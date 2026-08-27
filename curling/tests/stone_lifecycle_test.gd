@@ -15,6 +15,7 @@ func _ready() -> void:
 	await _test_remote_second_match_snapshot()
 	await _test_remote_snapshot_matches_host_stones()
 	await _test_gameplay_tee_calibration()
+	await _test_gameplay_recommended_draw()
 	await _test_camera_modes()
 	if _failures.is_empty():
 		print("CURLING_STONE_LIFECYCLE_OK stones=%d" % _stones().size())
@@ -249,6 +250,44 @@ func _test_gameplay_tee_calibration() -> void:
 			_failures.append("75 percent no-sweep gameplay draw remains in the house")
 		if tee_error_m > 0.25:
 			_failures.append("75 percent no-sweep gameplay draw stops near Tee: %.3fm error" % tee_error_m)
+
+
+func _test_gameplay_recommended_draw() -> void:
+	for test_direction in [-1, 1]:
+		controller.start_match(_players(), 1, 1, true, 88990 + test_direction)
+		await get_tree().physics_frame
+		controller.direction = test_direction
+		controller._force_lock_all_teams()
+		await get_tree().physics_frame
+		var stone := _stones()[controller.active_stone_id]
+		var throw_direction := Vector2(float(test_direction), 0.0)
+		if not controller.host_apply_throw(
+			controller.active_thrower_id,
+			throw_direction,
+			CurlingConstants.THROW_RECOMMENDED_POWER,
+			0.0
+		):
+			_failures.append("77 percent recommended draw launches through the host path")
+			continue
+		var frames_waited := 0
+		while controller.phase == CurlingMatchController.Phase.MOVING and frames_waited < 1800:
+			await get_tree().physics_frame
+			frames_waited += 1
+		var tee := CurlingConstants.tee_position(test_direction)
+		var tee_offset_m := (stone.global_position - tee).dot(throw_direction) / CurlingConstants.PIXELS_PER_METER
+		var turn_time_sec := float(frames_waited) / float(CurlingConstants.PHYSICS_HZ)
+		print(
+			"CURLING_GAMEPLAY_RECOMMENDED_DRAW direction=%d power=%.3f turn=%.3fs tee_offset=%+.3fm"
+			% [test_direction, CurlingConstants.THROW_RECOMMENDED_POWER, turn_time_sec, tee_offset_m]
+		)
+		if controller.phase == CurlingMatchController.Phase.MOVING:
+			_failures.append("77 percent recommended draw settles within 30 seconds")
+		if not stone.in_play or not CurlingRules.is_in_house(stone.global_position, test_direction):
+			_failures.append("77 percent recommended draw remains in the house")
+		if tee_offset_m < 1.0 or tee_offset_m > 1.3:
+			_failures.append("77 percent recommended draw stops %.3fm behind Tee" % tee_offset_m)
+		if absf(turn_time_sec - 22.67) > 0.12:
+			_failures.append("77 percent recommended draw turn lasts %.3fs" % turn_time_sec)
 
 
 func _test_camera_modes() -> void:

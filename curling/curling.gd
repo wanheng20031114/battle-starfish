@@ -781,7 +781,7 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 	_maybe_play_shot_clock_warning(data, phase_value)
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
-		CurlingMatchController.Phase.AIMING: instruction_label.text = "Tee参考 %d%%（直线·零旋转·不刷冰） · Q/E或滚轮调旋" % roundi(CurlingConstants.THROW_TEE_POWER * 100.0)
+		CurlingMatchController.Phase.AIMING: instruction_label.text = "入垒推荐 %d%%（直线·零旋转·不刷冰） · Q/E或滚轮调旋" % roundi(CurlingConstants.THROW_RECOMMENDED_POWER * 100.0)
 		CurlingMatchController.Phase.MOVING: instruction_label.text = "镜头自动跟壶 · 壶上方显示预计剩余时间 · 左键快速擦冰"
 		CurlingMatchController.Phase.SCORING: instruction_label.text = "测量距离并计算本End得分"
 	_refresh_match_overlay_visibility(phase_value)

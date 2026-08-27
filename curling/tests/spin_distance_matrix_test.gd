@@ -3,7 +3,7 @@ extends Node
 const TEST_POWERS := [0.65, 0.75, 0.85]
 const TEST_SPINS := [0.0, -0.6, 0.6, -1.2, 1.2]
 const TEST_DIRECTIONS := [-1, 1]
-const REFERENCE_POWERS := [0.74, 0.76]
+const REFERENCE_POWERS := [0.74, 0.76, 0.77, 0.78, 0.79]
 const MAX_SIMULATION_FRAMES := 2100
 const TIME_TOLERANCE_SEC := 0.035
 const PATH_TOLERANCE_M := 0.025
@@ -41,13 +41,17 @@ func _ready() -> void:
 				if is_equal_approx(float(power), CurlingConstants.THROW_TEE_POWER):
 					print(_case_summary(float(power), int(direction), float(spin), result))
 
+	print(_draw_reference_summary(0.75, _cases[_case_key(0.75, 1, 0.0)]))
 	for power in REFERENCE_POWERS:
 		for direction in TEST_DIRECTIONS:
 			var result := await _run_case(float(power), int(direction), 0.0)
 			_cases[_case_key(float(power), int(direction), 0.0)] = result
+			if int(direction) == 1:
+				print(_draw_reference_summary(float(power), result))
 
 	_check_direction_symmetry()
 	_check_spin_symmetry()
+	_check_straight_draw_reference()
 	_check_launch_coverage()
 	_finish()
 
@@ -212,6 +216,34 @@ func _check_launch_coverage() -> void:
 			_failures.append("stone %d launched %d times, expected %d" % [index, _launch_counts[index], expected_per_stone])
 
 
+func _check_straight_draw_reference() -> void:
+	var tee_distance := (
+		2.0 * CurlingConstants.TEE_FROM_CENTER_M
+		+ CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
+	)
+	var house_reach := (
+		CurlingConstants.HOUSE_RADII_PX[0] + CurlingConstants.STONE_RADIUS_PX
+	) / CurlingConstants.PIXELS_PER_METER
+	for direction in TEST_DIRECTIONS:
+		for power in [0.77, 0.78, 0.79]:
+			var result: Dictionary = _cases[_case_key(float(power), int(direction), 0.0)]
+			var records: Array = result["records"]
+			for record_variant in records:
+				var record: Dictionary = record_variant
+				var tee_offset := float(record["forward_m"]) - tee_distance
+				var in_house := absf(tee_offset) <= house_reach
+				if is_equal_approx(float(power), CurlingConstants.THROW_RECOMMENDED_POWER):
+					if not in_house or tee_offset < 1.0 or tee_offset > 1.3:
+						_failures.append("stone %d recommended draw is not safely behind tee" % int(record["stone_id"]))
+					var turn_time := float(record["time_sec"]) + CurlingConstants.SETTLE_TIME_SEC
+					if absf(turn_time - 22.67) > 0.08:
+						_failures.append("stone %d recommended draw turn time is %.3fs" % [int(record["stone_id"]), turn_time])
+				elif is_equal_approx(float(power), 0.78) and not in_house:
+					_failures.append("stone %d 78 percent draw should remain barely in house" % int(record["stone_id"]))
+				elif is_equal_approx(float(power), 0.79) and in_house:
+					_failures.append("stone %d 79 percent draw should pass the scoring edge" % int(record["stone_id"]))
+
+
 func _equivalent_power_points() -> float:
 	var max_power_points := 0.0
 	for direction in TEST_DIRECTIONS:
@@ -255,6 +287,37 @@ func _case_summary(power: float, direction: int, spin: float, result: Dictionary
 	return (
 		"CURLING_SPIN_MATRIX_CASE power=%.2f direction=%d spin=%+.2f time=%.3fs path=%.3fm forward=%.3fm lateral=%+.3fm"
 		% [power, direction, spin, time_total / divisor, path_total / divisor, forward_total / divisor, lateral_total / divisor]
+	)
+
+
+func _draw_reference_summary(power: float, result: Dictionary) -> String:
+	var records: Array = result["records"]
+	var time_total := 0.0
+	var forward_total := 0.0
+	for record_variant in records:
+		var record: Dictionary = record_variant
+		time_total += float(record["time_sec"])
+		forward_total += float(record["forward_m"])
+	var divisor := maxf(1.0, float(records.size()))
+	var stop_time := time_total / divisor
+	var forward := forward_total / divisor
+	var tee_distance := (
+		2.0 * CurlingConstants.TEE_FROM_CENTER_M
+		+ CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
+	)
+	var tee_offset := forward - tee_distance
+	var house_reach := (
+		CurlingConstants.HOUSE_RADII_PX[0] + CurlingConstants.STONE_RADIUS_PX
+	) / CurlingConstants.PIXELS_PER_METER
+	return (
+		"CURLING_STRAIGHT_DRAW_PROBE power=%d stop=%.3fs turn=%.3fs tee_offset=%+.3fm in_house=%s"
+		% [
+			roundi(power * 100.0),
+			stop_time,
+			stop_time + CurlingConstants.SETTLE_TIME_SEC,
+			tee_offset,
+			str(absf(tee_offset) <= house_reach),
+		]
 	)
 
 

@@ -36,18 +36,30 @@ func _test_dimensions_and_calibration() -> void:
 	_expect_close(CurlingConstants.STONE_MASS_KG, 19.0, 0.001, "stone mass")
 	_expect_close(CurlingConstants.STONE_RESTITUTION, 0.92, 0.0001, "restitution")
 	_expect_close(CurlingConstants.THROW_TEE_POWER, 0.75, 0.0001, "HUD Tee reference power")
+	_expect_close(CurlingConstants.THROW_RECOMMENDED_POWER, 0.77, 0.0001, "HUD recommended draw power")
 
 	var draw_distance := 2.0 * CurlingConstants.TEE_FROM_CENTER_M + CurlingConstants.HACK_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER
 	var standard_speed := draw_distance / 22.0 + 0.5 * CurlingConstants.BASE_DRAG_MPS2 * 22.0
-	var beginner_power := CurlingConstants.THROW_TEE_POWER
-	var beginner_speed := CurlingConstants.throw_speed_for_power(beginner_power)
-	var beginner_draw := _integrate_calibration(beginner_speed, 0.0, 0.0)
-	_expect_close(float(beginner_draw["forward"]), draw_distance, 0.35, "75 percent no-sweep straight draw reaches tee")
-	var swept_beginner_draw := _integrate_calibration(beginner_speed, 0.0, 1.0)
-	_expect(float(swept_beginner_draw["forward"]) > draw_distance + 2.5, "75 percent full-sweep draw clearly passes tee")
+	var tee_speed := CurlingConstants.throw_speed_for_power(CurlingConstants.THROW_TEE_POWER)
+	var tee_draw := _integrate_calibration(tee_speed, 0.0, 0.0)
+	_expect_close(float(tee_draw["forward"]), draw_distance, 0.35, "75 percent no-sweep straight draw reaches tee")
+	var swept_tee_draw := _integrate_calibration(tee_speed, 0.0, 1.0)
+	_expect(float(swept_tee_draw["forward"]) > draw_distance + 2.5, "75 percent full-sweep draw clearly passes tee")
 	var house_reach_m := (
 		CurlingConstants.HOUSE_RADII_PX[0] + CurlingConstants.STONE_RADIUS_PX
 	) / CurlingConstants.PIXELS_PER_METER
+	var recommended_draw := _integrate_calibration(
+		CurlingConstants.throw_speed_for_power(CurlingConstants.THROW_RECOMMENDED_POWER), 0.0, 0.0
+	)
+	var recommended_offset := float(recommended_draw["forward"]) - draw_distance
+	_expect(recommended_offset >= 1.0 and recommended_offset <= 1.3, "77 percent recommendation stops safely behind tee")
+	_expect(recommended_offset < house_reach_m - 0.7, "77 percent recommendation keeps back-house safety margin")
+	_expect_close(
+		float(recommended_draw["time"]) + CurlingConstants.SETTLE_TIME_SEC,
+		22.67,
+		0.20,
+		"77 percent recommendation ends just under 23 seconds"
+	)
 	for front_power in [0.72, 0.74]:
 		var front_draw := _integrate_calibration(CurlingConstants.throw_speed_for_power(front_power), 0.0, 0.0)
 		var front_offset := float(front_draw["forward"]) - draw_distance
@@ -59,8 +71,8 @@ func _test_dimensions_and_calibration() -> void:
 	var overdraw := _integrate_calibration(CurlingConstants.throw_speed_for_power(0.79), 0.0, 0.0)
 	var legal_back_center_m := CurlingConstants.BACK_LINE_FROM_TEE_PX / CurlingConstants.PIXELS_PER_METER + CurlingConstants.STONE_RADIUS_M
 	_expect(float(overdraw["forward"]) - draw_distance > legal_back_center_m, "79 percent no-sweep draw crosses the legal back-line limit")
-	var lower_step := beginner_speed - CurlingConstants.throw_speed_for_power(0.70)
-	var upper_step := CurlingConstants.throw_speed_for_power(0.80) - beginner_speed
+	var lower_step := tee_speed - CurlingConstants.throw_speed_for_power(0.70)
+	var upper_step := CurlingConstants.throw_speed_for_power(0.80) - tee_speed
 	_expect_close(lower_step, upper_step, 0.001, "throw power is linear around the 75 percent draw")
 	var planned_sweep_power := 0.70
 	var planned_sweep_speed := CurlingConstants.throw_speed_for_power(planned_sweep_power)
