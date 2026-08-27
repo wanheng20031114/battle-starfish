@@ -13,6 +13,7 @@ func _ready() -> void:
 	await _test_full_match_lifecycle()
 	await _test_centerline_throw_after_restart()
 	await _test_remote_second_match_snapshot()
+	await _test_remote_snapshot_matches_host_stones()
 	await _test_camera_modes()
 	if _failures.is_empty():
 		print("CURLING_STONE_LIFECYCLE_OK stones=%d" % _stones().size())
@@ -156,6 +157,53 @@ func _test_remote_second_match_snapshot() -> void:
 		_failures.append("second remote match renders the moving stone and timer")
 
 
+func _test_remote_snapshot_matches_host_stones() -> void:
+	controller.start_match(_players(), 1, 2, false, 66778)
+	await get_tree().physics_frame
+	var sequence := 73
+	var active_id := 3
+	if not controller.apply_remote_state(_remote_moving_state(sequence, 12, active_id)):
+		_failures.append("remote stone sync state applies")
+		return
+	var host_states: Array[Dictionary] = []
+	var in_play_ids := [0, active_id, 8, 12]
+	for index in range(CurlingConstants.STONE_COUNT):
+		var in_play := in_play_ids.has(index)
+		var moving := index == active_id
+		var velocity := Vector2(float(controller.direction) * 310.0, -12.0) if moving else Vector2.ZERO
+		host_states.append({
+			"id": index,
+			"team": CurlingConstants.TEAM_RED if index < CurlingConstants.STONES_PER_TEAM else CurlingConstants.TEAM_BLUE,
+			"in_play": in_play,
+			"moving": moving,
+			"position": Vector2(-240.0 + float(index) * 29.25, -54.0 + float(index) * 6.5),
+			"velocity": velocity,
+			"angle": -0.25 + float(index) * 0.035,
+			"angular_velocity": 1.1 if moving else 0.0,
+		})
+	var payload := CurlingStoneSnapshotCodec.encode_snapshot(Time.get_ticks_msec(), sequence, 12, host_states)
+	if not controller.apply_remote_snapshot(payload):
+		_failures.append("remote stone sync snapshot applies")
+		return
+	var decoded := CurlingStoneSnapshotCodec.decode_snapshot(payload)
+	var decoded_stones: Array = decoded.get("stones", [])
+	for stone_index in range(CurlingConstants.STONE_COUNT):
+		var expected: Dictionary = decoded_stones[stone_index]
+		var stone := _stones()[stone_index]
+		var expected_in_play := bool(expected.get("in_play", false))
+		if stone.in_play != expected_in_play:
+			_failures.append("remote stone sync in_play stone %d" % stone_index)
+			continue
+		if not expected_in_play:
+			_expect_inactive(stone, "remote stone sync")
+			continue
+		_expect_active(stone, "remote stone sync")
+		_expect_vector_close(stone.global_position, expected["position"] as Vector2, 0.2, "remote stone %d position" % stone_index)
+		_expect_vector_close(stone.remote_target_velocity, expected["velocity"] as Vector2, 0.2, "remote stone %d velocity" % stone_index)
+		if stone_index == active_id and not stone.active_delivered_stone:
+			_failures.append("remote stone sync active moving stone")
+
+
 func _test_camera_modes() -> void:
 	controller.start_match(_players(), 1, 1, true, 55667)
 	controller.reduced_motion = true
@@ -246,6 +294,11 @@ func _expect_inactive(stone: CurlingStone, context: String) -> void:
 func _expect_active(stone: CurlingStone, context: String) -> void:
 	if not stone.in_play or not stone.visible or stone.collision_layer == 0 or stone.collision_mask == 0:
 		_failures.append("%s stone %d is visible and collidable" % [context, stone.stone_id])
+
+
+func _expect_vector_close(actual: Vector2, expected: Vector2, tolerance: float, context: String) -> void:
+	if actual.distance_to(expected) > tolerance:
+		_failures.append("%s expected %s got %s" % [context, expected, actual])
 
 
 func _stones() -> Array[CurlingStone]:
