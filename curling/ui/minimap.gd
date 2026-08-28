@@ -114,5 +114,8 @@ func _draw_stones(sheet_rect: Rect2, world_scale: float) -> void:
 		var point := _world_to_minimap(world, sheet_rect, world_scale)
 		var color := CurlingConstants.TEAM_RED_COLOR if int(stone.get("team", 0)) == CurlingConstants.TEAM_RED else CurlingConstants.TEAM_BLUE_COLOR
 		var stone_radius := maxf(1.05, CurlingConstants.STONE_RADIUS_PX * world_scale)
+		if bool(stone.get("guard_protected", false)):
+			draw_circle(point, stone_radius + 2.1, Color("baf8ef"))
+			draw_circle(point, stone_radius + 1.15, Color("2b8f98"))
 		draw_circle(point, stone_radius + 0.65, CurlingConstants.NAVY_COLOR)
 		draw_circle(point, stone_radius, color)

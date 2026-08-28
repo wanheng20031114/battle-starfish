@@ -238,6 +238,14 @@ func _test_rules() -> void:
 	_expect(CurlingRules.is_in_free_guard_zone(reverse_guard, -1), "reverse guard zone classification")
 	var pre: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": guard, "in_play": true}]
 	var post: Array[Dictionary] = [{"id": 8, "team": CurlingConstants.TEAM_BLUE, "position": guard, "in_play": false}]
+	_expect(
+		CurlingRules.protected_guard_ids(pre, CurlingConstants.TEAM_RED, 0, 1) == [8],
+		"authoritative guard query identifies the opponent FGZ stone",
+	)
+	_expect(
+		CurlingRules.protected_guard_ids(pre, CurlingConstants.TEAM_RED, 5, 1).is_empty(),
+		"authoritative guard query clears after the fifth delivered stone",
+	)
 	for delivered_before in range(CurlingRules.FREE_GUARD_PROTECTED_STONES):
 		_expect(
 			CurlingRules.has_free_guard_violation(pre, post, CurlingConstants.TEAM_RED, delivered_before, 1),
@@ -256,6 +264,32 @@ func _test_rules() -> void:
 	_expect(CurlingRules.has_no_tick_violation(center_pre, ticked_off_center, CurlingConstants.TEAM_RED, 4, 1), "fifth-stone no-tick rollback")
 	_expect(not CurlingRules.has_no_tick_violation(center_pre, ticked_off_center, CurlingConstants.TEAM_RED, 5, 1), "no-tick protection ends on sixth delivered stone")
 	_expect(not CurlingRules.has_no_tick_violation(center_pre, moved_on_center, CurlingConstants.TEAM_RED, 2, 1), "center guard may move along center line inside FGZ")
+
+	var controller_scene := load("res://curling/game/match_controller.tscn") as PackedScene
+	var players: Array[Dictionary] = [
+		{"id": 1, "nickname": "红", "team": CurlingConstants.TEAM_RED, "connected": true},
+		{"id": 2, "nickname": "蓝", "team": CurlingConstants.TEAM_BLUE, "connected": true},
+	]
+	var authority := controller_scene.instantiate() as CurlingMatchController
+	root.add_child(authority)
+	authority.start_match(players, 1, 1, true, 91)
+	authority.active_team = CurlingConstants.TEAM_RED
+	authority.delivered_count = 2
+	authority.direction = 1
+	authority._pre_shot_state = pre
+	authority._refresh_guard_protection_for_current_throw()
+	_expect(authority.protected_stone_mask == 1 << 8, "host stores protected guards as an authoritative mask")
+	var exported_guard_state := authority.export_state_for(CurlingConstants.TEAM_BLUE)
+	_expect(int(exported_guard_state.get("protected_stone_mask", 0)) == 1 << 8, "guard mask is part of match state")
+	authority.free()
+
+	var remote := controller_scene.instantiate() as CurlingMatchController
+	root.add_child(remote)
+	remote.start_match(players, 1, 2, false, 92)
+	exported_guard_state["state_sequence"] = remote.state_sequence + 1
+	_expect(remote.apply_remote_state(exported_guard_state), "remote accepts authoritative guard state")
+	_expect(remote.protected_stone_mask == 1 << 8 and remote._stones[8].guard_protected, "remote applies protection to the same stone")
+	remote.free()
 
 
 func _test_snapshot_codec() -> void:
@@ -448,7 +482,7 @@ func _test_team_aim_privacy_and_geometry() -> void:
 	teammate.hud_changed.connect(func(data: Dictionary) -> void: teammate_hud["data"] = data)
 	var shared_direction := Vector2.RIGHT.rotated(deg_to_rad(0.27))
 	_expect(teammate.show_aim_preview(shared_direction, 0.77125, 1.25), "same-team aim preview is accepted")
-	_expect(teammate.has_visible_aim_preview(), "same-team short aim guide is visible")
+	_expect(teammate.has_visible_aim_preview(), "same-team aim guide is visible")
 	_expect(not teammate.has_method("_predict_path"), "formal match no longer exposes a full path predictor")
 	var shared_data := teammate.get_aim_preview_data()
 	_expect_close(float(shared_data.get("power", 0.0)), 0.77125, 0.000001, "teammate receives exact aim power")
@@ -464,8 +498,14 @@ func _test_team_aim_privacy_and_geometry() -> void:
 	var straight_end := positive_geometry.get("straight_end", Vector2.ZERO) as Vector2
 	var positive_arrow := positive_geometry.get("arrow_direction", Vector2.ZERO) as Vector2
 	var curve_points := positive_geometry.get("curve_points", PackedVector2Array()) as PackedVector2Array
-	_expect(straight_start.distance_to(straight_end) < 430.0, "formal straight guide stays within a partial viewport")
+	_expect_close(
+		straight_start.distance_to(straight_end),
+		CurlingConstants.SHEET_LENGTH_PX - CurlingConstants.STONE_RADIUS_PX - 7.0,
+		0.01,
+		"formal straight guide spans the full sheet",
+	)
 	_expect(curve_points.size() == 33, "spin guide uses a short sampled dashed curve")
+	_expect(curve_points[-1].distance_to(straight_start) < 230.0, "spin guide keeps its short visual range")
 	_expect(curve_points[-1].distance_to(straight_start) < straight_end.distance_to(straight_start), "spin guide is shorter than the straight guide")
 	_expect(absf(positive_arrow.dot(shared_direction.normalized())) < 0.0001, "spin arrow is perpendicular to the aim line")
 	_expect(shared_direction.cross(positive_arrow) > 0.0, "positive spin arrow points to the positive curl side")
@@ -536,6 +576,31 @@ func _test_ui_asset_boundary_and_audio_cues() -> void:
 		and not curling_scene.contains("assets/ui_pixel/"),
 		"curling multiplayer does not reuse decorative generated images",
 	)
+	_expect(
+		curling_scene.contains("GuardStatus")
+		and curling_scene.contains("GuardProgress")
+		and curling_scene.contains("ControlRow"),
+		"match HUD exposes guard status and separates its control row",
+	)
+
+	var stone_scene := load("res://curling/game/curling_stone.tscn") as PackedScene
+	var protected_stone := stone_scene.instantiate() as CurlingStone
+	root.add_child(protected_stone)
+	protected_stone.in_play = true
+	protected_stone.visible = true
+	protected_stone.set_guard_protected(true)
+	var protection_material := protected_stone.protection_overlay.material as ShaderMaterial
+	_expect(protected_stone.protection_overlay.visible, "protected guard enables its geometric overlay")
+	_expect(
+		protection_material != null
+		and protection_material.shader != null
+		and protection_material.shader.code.contains("TIME")
+		and protection_material.shader.code.contains("diagonal_progress"),
+		"protected guard shader contains animated diagonal sheen",
+	)
+	protected_stone.set_guard_protected(false)
+	_expect(not protected_stone.protection_overlay.visible, "guard overlay disables with authoritative state")
+	protected_stone.free()
 
 	_expect(CurlingAppScript.SHOT_CLOCK_WARNING_SECONDS.size() == 10, "shot clock has ten warning seconds")
 	for second in range(1, 11):

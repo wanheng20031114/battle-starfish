@@ -729,8 +729,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -354.0
-offset_top = -414.0
+offset_left = -360.0
+offset_top = -466.0
 offset_right = -18.0
 offset_bottom = -18.0
 grow_horizontal = 0
@@ -748,23 +748,44 @@ offset_right = -12.0
 offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 7
+theme_override_constants/separation = 6
 
 [node name="Active" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 19
 text = "瞄准 · 玩家"
 
 [node name="Teams" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.22, 0.43, 0.45, 1)
 text = "后手 红队 · 本手 蓝队\n已投 0 / 16"
 
+[node name="StatusSeparator" type="HSeparator" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
+
+[node name="GuardStatus" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.06, 0.48, 0.5, 1)
+theme_override_font_sizes/font_size = 15
+text = "五壶保护 · 第 1 / 5 壶 · 0 枚"
+
+[node name="GuardProgress" type="ProgressBar" parent="UI/MatchHUD/RightRail/Layout"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+max_value = 5.0
+value = 1.0
+show_percentage = false
+
 [node name="Minimap" type="Control" parent="UI/MatchHUD/RightRail/Layout"]
-custom_minimum_size = Vector2(0, 64)
+custom_minimum_size = Vector2(0, 78)
 layout_mode = 2
 mouse_filter = 2
 script = ExtResource("9_minimap")
+
+[node name="ChatSeparator" type="HSeparator" parent="UI/MatchHUD/RightRail/Layout"]
+layout_mode = 2
 
 [node name="ChatLabel" type="Label" parent="UI/MatchHUD/RightRail/Layout"]
 visible = false
@@ -817,7 +838,7 @@ anchors_preset = 12
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = -86.0
+offset_top = -118.0
 offset_right = -380.0
 offset_bottom = -18.0
 grow_horizontal = 2
@@ -825,36 +846,50 @@ grow_vertical = 0
 theme_override_styles/panel = SubResource("Top_bar")
 mouse_filter = 2
 
-[node name="BottomBar" type="HBoxContainer" parent="UI/MatchHUD"]
+[node name="BottomBar" type="VBoxContainer" parent="UI/MatchHUD"]
 layout_mode = 1
 anchors_preset = 12
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 52.0
-offset_top = -72.0
-offset_right = -410.0
+offset_top = -106.0
+offset_right = -404.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_constants/separation = 12
+theme_override_constants/separation = 5
 mouse_filter = 2
 
 [node name="Instruction" type="Label" parent="UI/MatchHUD/BottomBar"]
+custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
-size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.22, 0.43, 0.45, 1)
+theme_override_font_sizes/font_size = 15
 text = "从壶向后拖拽"
 
-[node name="Power" type="ProgressBar" parent="UI/MatchHUD/BottomBar"]
-custom_minimum_size = Vector2(220, 22)
+[node name="ControlRow" type="HBoxContainer" parent="UI/MatchHUD/BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PowerCaption" type="Label" parent="UI/MatchHUD/BottomBar/ControlRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "力度"
+vertical_alignment = 1
+
+[node name="Power" type="ProgressBar" parent="UI/MatchHUD/BottomBar/ControlRow"]
+custom_minimum_size = Vector2(238, 24)
 layout_mode = 2
 max_value = 100.0
 show_percentage = true
 
-[node name="Spin" type="Label" parent="UI/MatchHUD/BottomBar"]
+[node name="Spin" type="Label" parent="UI/MatchHUD/BottomBar/ControlRow"]
 layout_mode = 2
-custom_minimum_size = Vector2(300, 0)
+size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 16
-text = "力0.00% · 向+0.00° · 旋+0.00rad/s"
+text = "方向 +0.00°  ·  旋转 +0.00 rad/s"
+horizontal_alignment = 2
+vertical_alignment = 1
 
 [node name="ResultScreen" type="Control" parent="UI"]
 visible = false

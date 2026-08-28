@@ -1,7 +1,8 @@
 extends Node2D
 class_name CurlingAimGuide
 
-const STRAIGHT_LENGTH_PX := 420.0
+const STRAIGHT_LENGTH_PX := CurlingConstants.SHEET_LENGTH_PX
+const STRAIGHT_LABEL_FORWARD_PX := 420.0
 const CURVE_FORWARD_PX := 178.0
 const CURVE_MAX_OFFSET_PX := 73.0
 const CURVE_SEGMENTS := 32
@@ -123,7 +124,7 @@ func _draw() -> void:
 	draw_circle(_straight_end, 2.8, Color(_team_color, 0.92))
 	_draw_centered_text(
 		"瞄准 %+0.02f°" % preview_aim_offset_degrees,
-		_straight_end + Vector2(0.0, -13.0),
+		_start + _direction * STRAIGHT_LABEL_FORWARD_PX + Vector2(0.0, -13.0),
 		Color(_team_color.lightened(0.24), 0.98)
 	)
 	if _curve_points.size() < 2:

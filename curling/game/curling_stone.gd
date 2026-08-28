@@ -16,6 +16,7 @@ var remote_target_position := Vector2.ZERO
 var remote_target_rotation := 0.0
 var remote_target_velocity := Vector2.ZERO
 var inspection_selected := false
+var guard_protected := false
 var _remote_samples: Array[Dictionary] = []
 var _in_play_collision_layer := 1
 var _in_play_collision_mask := 1
@@ -28,6 +29,7 @@ var _telemetry_collision_impulse_ns := 0.0
 
 @onready var slide_time_marker: Node2D = $SlideTimeMarker
 @onready var slide_time_label: Label = $SlideTimeMarker/Time
+@onready var protection_overlay: Polygon2D = $ProtectionOverlay
 
 
 func _ready() -> void:
@@ -45,6 +47,11 @@ func _ready() -> void:
 	contact_monitor = true
 	max_contacts_reported = 16
 	body_entered.connect(_on_body_entered)
+	protection_overlay.set_instance_shader_parameter(
+		"phase_offset",
+		fmod(float(stone_id) * 0.173, 1.0)
+	)
+	_sync_guard_protection_visual()
 	queue_redraw()
 
 
@@ -106,6 +113,7 @@ func prepare_for_delivery(position: Vector2, owner_id: int, player_color: Color)
 	_reset_physics_telemetry()
 	owner_player_id = owner_id
 	owner_color = player_color
+	set_guard_protected(false)
 	in_play = true
 	active_delivered_stone = true
 	visible = true
@@ -138,6 +146,7 @@ func remove_from_play() -> void:
 	_reset_physics_telemetry()
 	in_play = false
 	active_delivered_stone = false
+	set_guard_protected(false)
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
 	linear_damp = 0.0
@@ -173,6 +182,7 @@ func restore_authoritative_state(snapshot: Dictionary) -> void:
 	_reset_physics_telemetry()
 	in_play = bool(snapshot.get("in_play", false))
 	visible = in_play
+	_sync_guard_protection_visual()
 	freeze = true
 	var restored_position: Vector2 = snapshot.get("position", Vector2.ZERO)
 	var restored_rotation := float(snapshot.get("angle", 0.0))
@@ -199,6 +209,7 @@ func apply_remote_snapshot(snapshot: Dictionary, force_snap: bool, is_active_sto
 		return
 	in_play = true
 	visible = true
+	_sync_guard_protection_visual()
 	freeze = true
 	_set_collision_active(true)
 	var receive_ms := Time.get_ticks_msec()
@@ -266,14 +277,8 @@ func _update_slide_time_marker() -> void:
 		return
 	var heat := heat_grid.sample_heat(global_position) if heat_grid != null else 0.0
 	var remaining := estimate_remaining_slide_time(speed_mps, heat)
-	var cold_remaining := estimate_remaining_slide_time(speed_mps, 0.0)
-	var sweep_extension := maxf(0.0, remaining - cold_remaining)
-	if sweep_extension >= 0.05:
-		slide_time_label.text = "预计剩余 %.1f 秒\n擦冰 +%.1f 秒" % [remaining, sweep_extension]
-		slide_time_label.add_theme_color_override("font_color", CurlingConstants.CYAN_ACCENT.darkened(0.48))
-	else:
-		slide_time_label.text = "预计剩余 %.1f 秒" % remaining
-		slide_time_label.add_theme_color_override("font_color", CurlingConstants.NAVY_COLOR)
+	slide_time_label.text = "%.1fs" % remaining
+	slide_time_label.add_theme_color_override("font_color", CurlingConstants.NAVY_COLOR)
 
 
 func _render_buffered_remote_state() -> void:
@@ -304,6 +309,7 @@ func export_state() -> Dictionary:
 		"id": stone_id,
 		"team": team,
 		"owner_player_id": owner_player_id,
+		"guard_protected": guard_protected,
 		"in_play": in_play,
 		"position": global_position,
 		"velocity": linear_velocity,
@@ -337,6 +343,16 @@ func set_inspection_selected(selected: bool) -> void:
 		return
 	inspection_selected = selected
 	queue_redraw()
+
+
+func set_guard_protected(protected: bool) -> void:
+	guard_protected = protected
+	_sync_guard_protection_visual()
+
+
+func _sync_guard_protection_visual() -> void:
+	if protection_overlay != null:
+		protection_overlay.visible = guard_protected and in_play
 
 
 func _on_body_entered(body: Node) -> void:

@@ -61,6 +61,7 @@ var phase_time_remaining := 0.0
 var active_stone_id := -1
 var active_thrower_id := 0
 var active_team := CurlingConstants.TEAM_NONE
+var protected_stone_mask := 0
 var state_sequence := 0
 var shot_id := 0
 var reduced_motion := false
@@ -168,6 +169,7 @@ func _reset_transient_match_state() -> void:
 	active_stone_id = -1
 	active_thrower_id = 0
 	active_team = CurlingConstants.TEAM_NONE
+	_set_guard_protection_mask(0)
 	local_input_locked = false
 	_settle_elapsed = 0.0
 	_score_delay = 0.0
@@ -465,6 +467,7 @@ func apply_remote_state(state: Dictionary) -> bool:
 	active_stone_id = int(state.get("active_stone_id", -1))
 	active_thrower_id = int(state.get("active_thrower_id", 0))
 	active_team = int(state.get("active_team", CurlingConstants.TEAM_NONE))
+	_set_guard_protection_mask(int(state.get("protected_stone_mask", 0)))
 	shot_id = int(state.get("shot_id", 0))
 	if shot_id != previous_shot_id or active_thrower_id != previous_thrower_id:
 		_current_spin = 0.0
@@ -533,6 +536,7 @@ func export_state_for(viewer_team: int = CurlingConstants.TEAM_NONE) -> Dictiona
 		"active_stone_id": active_stone_id,
 		"active_thrower_id": active_thrower_id,
 		"active_team": active_team,
+		"protected_stone_mask": protected_stone_mask,
 		"shot_id": shot_id,
 		"players": players.duplicate(true),
 		"lineups": exported_lineups,
@@ -566,6 +570,34 @@ func get_stone_states() -> Array[Dictionary]:
 	for stone in _stones:
 		states.append(stone.export_state())
 	return states
+
+
+func get_protected_stone_count() -> int:
+	var count := 0
+	for stone_index in range(_stones.size()):
+		if protected_stone_mask & (1 << stone_index):
+			count += 1
+	return count
+
+
+func _set_guard_protection_mask(next_mask: int) -> void:
+	var valid_mask := (1 << _stones.size()) - 1 if not _stones.is_empty() else 0
+	protected_stone_mask = next_mask & valid_mask
+	for stone in _stones:
+		stone.set_guard_protected(bool(protected_stone_mask & (1 << stone.stone_id)))
+
+
+func _refresh_guard_protection_for_current_throw() -> void:
+	var next_mask := 0
+	for protected_id in CurlingRules.protected_guard_ids(
+		_pre_shot_state,
+		active_team,
+		delivered_count,
+		direction
+	):
+		if protected_id >= 0 and protected_id < _stones.size():
+			next_mask |= 1 << protected_id
+	_set_guard_protection_mask(next_mask)
 
 
 func get_local_team() -> int:
@@ -665,6 +697,7 @@ func force_forfeit(winning_team: int, reason: String) -> void:
 	if not authoritative or phase == Phase.RESULT:
 		return
 	phase = Phase.RESULT
+	_set_guard_protection_mask(0)
 	final_result = {
 		"winner": winning_team,
 		"red_score": red_score,
@@ -690,6 +723,7 @@ func _begin_tactics() -> void:
 	active_stone_id = -1
 	active_thrower_id = 0
 	active_team = CurlingConstants.TEAM_NONE
+	_set_guard_protection_mask(0)
 	lineups = {
 		CurlingConstants.TEAM_RED: [0, 0, 0, 0, 0, 0, 0, 0],
 		CurlingConstants.TEAM_BLUE: [0, 0, 0, 0, 0, 0, 0, 0],
@@ -765,6 +799,7 @@ func _begin_next_throw() -> void:
 	active_stone_id = team_slot if active_team == CurlingConstants.TEAM_RED else CurlingConstants.STONES_PER_TEAM + team_slot
 	shot_id = (shot_id + 1) & 0xFFFF
 	_pre_shot_state = get_stone_states()
+	_refresh_guard_protection_for_current_throw()
 	for stone in _stones:
 		stone.enable_for_shot()
 	var owner_color := _player_color(active_thrower_id)
@@ -835,6 +870,7 @@ func _resolve_shot() -> void:
 
 func _score_end() -> void:
 	phase = Phase.SCORING
+	_set_guard_protection_mask(0)
 	var result := CurlingRules.score_end(get_stone_states(), direction)
 	var scoring_team := int(result.get("team", CurlingConstants.TEAM_NONE))
 	var points := int(result.get("points", 0))
@@ -1310,6 +1346,15 @@ func _emit_hud() -> void:
 		"active_team": active_team,
 		"active_player": player_name(active_thrower_id),
 		"active_player_id": active_thrower_id,
+		"guard_window_active": (
+			delivered_count < CurlingRules.FREE_GUARD_PROTECTED_STONES
+			and phase in [Phase.AIMING, Phase.MOVING]
+		),
+		"guard_throw_index": mini(
+			delivered_count + 1,
+			CurlingRules.FREE_GUARD_PROTECTED_STONES
+		),
+		"protected_stone_count": get_protected_stone_count(),
 		"can_view_aim": can_view_aim,
 		"aim_visible": aim_visible,
 		"aim_from_teammate": aim_visible and not _aim_preview_from_local,

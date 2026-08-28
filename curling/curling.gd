@@ -57,9 +57,12 @@ const CurlingManualPanelScript := preload("res://curling/manual/curling_manual_p
 @onready var timer_label: Label = $UI/MatchHUD/TopBar/Timer
 @onready var active_label: Label = $UI/MatchHUD/RightRail/Layout/Active
 @onready var team_status_label: Label = $UI/MatchHUD/RightRail/Layout/Teams
+@onready var guard_status_label: Label = $UI/MatchHUD/RightRail/Layout/GuardStatus
+@onready var guard_progress: ProgressBar = $UI/MatchHUD/RightRail/Layout/GuardProgress
 @onready var instruction_label: Label = $UI/MatchHUD/BottomBar/Instruction
-@onready var power_bar: ProgressBar = $UI/MatchHUD/BottomBar/Power
-@onready var spin_label: Label = $UI/MatchHUD/BottomBar/Spin
+@onready var power_caption: Label = $UI/MatchHUD/BottomBar/ControlRow/PowerCaption
+@onready var power_bar: ProgressBar = $UI/MatchHUD/BottomBar/ControlRow/Power
+@onready var spin_label: Label = $UI/MatchHUD/BottomBar/ControlRow/Spin
 @onready var minimap: CurlingMinimap = $UI/MatchHUD/RightRail/Layout/Minimap
 @onready var chat_history: RichTextLabel = $UI/MatchHUD/RightRail/Layout/ChatHistory
 @onready var chat_channel: OptionButton = $UI/MatchHUD/RightRail/Layout/ChatRow/Channel
@@ -901,24 +904,39 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 	)
 	active_label.text = "%s · %s" % [str(data.get("phase_name", "")), str(data.get("active_player", ""))]
 	team_status_label.text = "后手 %s  ·  本手 %s\n已投 %d / 16" % [CurlingConstants.team_name(int(data.get("hammer_team", 0))), CurlingConstants.team_name(int(data.get("active_team", 0))), int(data.get("delivered", 0))]
+	var guard_window_active := bool(data.get("guard_window_active", false))
+	var guard_throw_index := int(data.get("guard_throw_index", 0))
+	var protected_stone_count := int(data.get("protected_stone_count", 0))
+	guard_progress.value = guard_throw_index if guard_window_active else CurlingRules.FREE_GUARD_PROTECTED_STONES
+	if guard_window_active:
+		guard_status_label.text = "五壶保护 · 第 %d / 5 壶 · 受保护 %d" % [
+			guard_throw_index,
+			protected_stone_count,
+		]
+		guard_status_label.add_theme_color_override("font_color", Color("0f7a80"))
+	else:
+		guard_status_label.text = "五壶保护 · 已结束"
+		guard_status_label.add_theme_color_override("font_color", Color("547377"))
 	var can_view_aim := bool(data.get("can_view_aim", false))
 	var aim_visible := bool(data.get("aim_visible", false))
 	if phase_value == CurlingMatchController.Phase.AIMING and can_view_aim:
+		power_caption.visible = true
 		power_bar.visible = true
 		power_bar.value = float(data.get("power", 0.0)) * 100.0
 		if aim_visible:
-			spin_label.text = "力%.2f%% · 向%+0.02f° · 旋%+0.2frad/s" % [
-				float(data.get("power", 0.0)) * 100.0,
+			spin_label.text = "方向 %+0.02f°  ·  旋转 %+0.2f rad/s" % [
 				float(data.get("aim_offset_degrees", 0.0)),
 				float(data.get("spin", 0.0)),
 			]
 		else:
 			spin_label.text = "等待本队出手者调整力度与旋转"
 	elif phase_value == CurlingMatchController.Phase.AIMING:
+		power_caption.visible = false
 		power_bar.visible = false
 		power_bar.value = 0.0
 		spin_label.text = "对方正在瞄准 · 战术参数隐藏"
 	else:
+		power_caption.visible = false
 		power_bar.visible = false
 		power_bar.value = 0.0
 		spin_label.text = ""
@@ -927,7 +945,7 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
 		CurlingMatchController.Phase.AIMING: instruction_label.text = "推荐%d%% · 拖拽时 A/D方向 · W/S力度 · Shift慢调" % roundi(CurlingConstants.THROW_RECOMMENDED_POWER * 100.0)
-		CurlingMatchController.Phase.MOVING: instruction_label.text = "镜头自动跟壶 · 壶上方显示预计剩余时间 · 左键快速擦冰"
+		CurlingMatchController.Phase.MOVING: instruction_label.text = "镜头自动跟壶 · 壶上方显示剩余秒数 · 左键快速擦冰"
 		CurlingMatchController.Phase.SCORING: instruction_label.text = "测量距离并计算本End得分"
 	_refresh_match_overlay_visibility(phase_value)
 	audio.set_sweeping(_current_screen == "match" and bool(data.get("sweeping", false)), 0.7)

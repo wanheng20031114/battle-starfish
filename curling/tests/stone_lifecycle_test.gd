@@ -103,8 +103,15 @@ func _test_centerline_throw_after_restart() -> void:
 		_failures.append("full-sheet centerline throw starts")
 		return
 	await get_tree().physics_frame
-	if not stone.slide_time_marker.visible or not stone.slide_time_label.text.begins_with("预计剩余"):
-		_failures.append("moving stone shows its remaining slide time")
+	var slide_time_text := stone.slide_time_label.text
+	if (
+		not stone.slide_time_marker.visible
+		or not slide_time_text.ends_with("s")
+		or slide_time_text.contains(" ")
+		or slide_time_text.contains("\n")
+	):
+		_failures.append("moving stone shows one compact remaining-time value")
+	var remaining_before_heat := slide_time_text.substr(0, slide_time_text.length() - 1).to_float()
 	var heat_finish_ms := Time.get_ticks_msec()
 	for sample_index in range(24):
 		controller.heat_grid.deposit_segment(
@@ -115,8 +122,15 @@ func _test_centerline_throw_after_restart() -> void:
 			false
 		)
 	stone._update_slide_time_marker()
-	if not stone.slide_time_label.text.contains("擦冰 +"):
-		_failures.append("moving-stone timer exposes the current sweep extension")
+	var heated_time_text := stone.slide_time_label.text
+	var remaining_after_heat := heated_time_text.substr(0, heated_time_text.length() - 1).to_float()
+	if (
+		not heated_time_text.ends_with("s")
+		or heated_time_text.contains(" ")
+		or heated_time_text.contains("\n")
+		or remaining_after_heat <= remaining_before_heat
+	):
+		_failures.append("moving-stone timer stays compact and reacts to sweep heat")
 	var previous_progress := stone.global_position.x * throw_direction.x
 	var crossed_center := false
 	var reversed := false

@@ -26,6 +26,33 @@ static func is_touching_center_line(position: Vector2) -> bool:
 	return absf(position.y) <= CurlingConstants.STONE_RADIUS_PX + CENTER_LINE_HALF_WIDTH_PX
 
 
+static func protected_guard_ids(
+	stones: Array[Dictionary],
+	delivered_team: int,
+	delivered_count_before_shot: int,
+	direction: int
+) -> Array[int]:
+	var protected_ids: Array[int] = []
+	if (
+		delivered_count_before_shot >= FREE_GUARD_PROTECTED_STONES
+		or delivered_team not in [CurlingConstants.TEAM_RED, CurlingConstants.TEAM_BLUE]
+	):
+		return protected_ids
+	var opponent := CurlingConstants.other_team(delivered_team)
+	for stone in stones:
+		var position_variant: Variant = stone.get("position")
+		if (
+			int(stone.get("team", CurlingConstants.TEAM_NONE)) != opponent
+			or not bool(stone.get("in_play", false))
+			or not position_variant is Vector2
+		):
+			continue
+		if is_in_free_guard_zone(position_variant as Vector2, direction):
+			protected_ids.append(int(stone.get("id", -1)))
+	protected_ids.sort()
+	return protected_ids
+
+
 static func is_out_of_play(position: Vector2, direction: int) -> bool:
 	if absf(position.y) + CurlingConstants.STONE_RADIUS_PX >= CurlingConstants.HALF_SHEET_WIDTH_PX:
 		return true
@@ -87,24 +114,19 @@ static func has_free_guard_violation(
 	delivered_count_before_shot: int,
 	direction: int
 ) -> bool:
-	if delivered_count_before_shot >= FREE_GUARD_PROTECTED_STONES:
+	var protected_ids := protected_guard_ids(
+		pre_shot,
+		delivered_team,
+		delivered_count_before_shot,
+		direction
+	)
+	if protected_ids.is_empty():
 		return false
-	var opponent := CurlingConstants.other_team(delivered_team)
 	var post_by_id := {}
 	for stone in post_shot:
 		post_by_id[int(stone.get("id", -1))] = stone
-	for before in pre_shot:
-		var before_position_variant: Variant = before.get("position")
-		if not before_position_variant is Vector2:
-			continue
-		var before_position := before_position_variant as Vector2
-		if (
-			int(before.get("team", CurlingConstants.TEAM_NONE)) != opponent
-			or not bool(before.get("in_play", false))
-			or not is_in_free_guard_zone(before_position, direction)
-		):
-			continue
-		var after_variant: Variant = post_by_id.get(int(before.get("id", -1)))
+	for protected_id in protected_ids:
+		var after_variant: Variant = post_by_id.get(protected_id)
 		if typeof(after_variant) != TYPE_DICTIONARY:
 			return true
 		var after: Dictionary = after_variant
@@ -120,9 +142,14 @@ static func has_no_tick_violation(
 	delivered_count_before_shot: int,
 	direction: int
 ) -> bool:
-	if delivered_count_before_shot >= FREE_GUARD_PROTECTED_STONES:
+	var protected_ids := protected_guard_ids(
+		pre_shot,
+		delivered_team,
+		delivered_count_before_shot,
+		direction
+	)
+	if protected_ids.is_empty():
 		return false
-	var opponent := CurlingConstants.other_team(delivered_team)
 	var post_by_id := {}
 	for stone in post_shot:
 		post_by_id[int(stone.get("id", -1))] = stone
@@ -132,9 +159,7 @@ static func has_no_tick_violation(
 			continue
 		var before_position := before_position_variant as Vector2
 		if (
-			int(before.get("team", CurlingConstants.TEAM_NONE)) != opponent
-			or not bool(before.get("in_play", false))
-			or not is_in_free_guard_zone(before_position, direction)
+			int(before.get("id", -1)) not in protected_ids
 			or not is_touching_center_line(before_position)
 		):
 			continue
