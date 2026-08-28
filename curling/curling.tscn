@@ -838,7 +838,7 @@ anchors_preset = 12
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = -118.0
+offset_top = -150.0
 offset_right = -380.0
 offset_bottom = -18.0
 grow_horizontal = 2
@@ -852,12 +852,12 @@ anchors_preset = 12
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 52.0
-offset_top = -106.0
+offset_top = -138.0
 offset_right = -404.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_constants/separation = 5
+theme_override_constants/separation = 4
 mouse_filter = 2
 
 [node name="Instruction" type="Label" parent="UI/MatchHUD/BottomBar"]
@@ -866,6 +866,15 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.22, 0.43, 0.45, 1)
 theme_override_font_sizes/font_size = 15
 text = "从壶向后拖拽"
+
+[node name="KeyGuide" type="Label" parent="UI/MatchHUD/BottomBar"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.063, 0.129, 0.196, 1)
+theme_override_font_sizes/font_size = 14
+text = "拖拽中  A/D 或 ←/→ 方向 · W/S 或 ↑/↓ 力度 · Shift 精调    瞄准中  Q/E 或滚轮调旋"
+autowrap_mode = 2
+vertical_alignment = 1
 
 [node name="ControlRow" type="HBoxContainer" parent="UI/MatchHUD/BottomBar"]
 layout_mode = 2

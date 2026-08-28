@@ -1326,6 +1326,11 @@ func _mark_state_changed() -> void:
 
 func _emit_hud() -> void:
 	var can_view_aim := phase == Phase.AIMING and _local_team() == active_team
+	var can_adjust_aim := (
+		phase == Phase.AIMING
+		and active_thrower_id == local_player_id
+		and not local_input_locked
+	)
 	var aim_visible := can_view_aim and _aim_preview_visible
 	var aim_offset := 0.0
 	if aim_visible and _aim_preview_direction.length_squared() >= 0.9:
@@ -1356,6 +1361,8 @@ func _emit_hud() -> void:
 		),
 		"protected_stone_count": get_protected_stone_count(),
 		"can_view_aim": can_view_aim,
+		"can_adjust_aim": can_adjust_aim,
+		"aim_dragging": can_adjust_aim and _dragging,
 		"aim_visible": aim_visible,
 		"aim_from_teammate": aim_visible and not _aim_preview_from_local,
 		"spin": _aim_preview_spin if aim_visible else 0.0,

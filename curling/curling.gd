@@ -60,6 +60,7 @@ const CurlingManualPanelScript := preload("res://curling/manual/curling_manual_p
 @onready var guard_status_label: Label = $UI/MatchHUD/RightRail/Layout/GuardStatus
 @onready var guard_progress: ProgressBar = $UI/MatchHUD/RightRail/Layout/GuardProgress
 @onready var instruction_label: Label = $UI/MatchHUD/BottomBar/Instruction
+@onready var key_guide_label: Label = $UI/MatchHUD/BottomBar/KeyGuide
 @onready var power_caption: Label = $UI/MatchHUD/BottomBar/ControlRow/PowerCaption
 @onready var power_bar: ProgressBar = $UI/MatchHUD/BottomBar/ControlRow/Power
 @onready var spin_label: Label = $UI/MatchHUD/BottomBar/ControlRow/Spin
@@ -918,7 +919,10 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 		guard_status_label.text = "五壶保护 · 已结束"
 		guard_status_label.add_theme_color_override("font_color", Color("547377"))
 	var can_view_aim := bool(data.get("can_view_aim", false))
+	var can_adjust_aim := bool(data.get("can_adjust_aim", false))
+	var aim_dragging := bool(data.get("aim_dragging", false))
 	var aim_visible := bool(data.get("aim_visible", false))
+	var active_player_name := str(data.get("active_player", ""))
 	if phase_value == CurlingMatchController.Phase.AIMING and can_view_aim:
 		power_caption.visible = true
 		power_bar.visible = true
@@ -928,8 +932,10 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 				float(data.get("aim_offset_degrees", 0.0)),
 				float(data.get("spin", 0.0)),
 			]
+		elif can_adjust_aim:
+			spin_label.text = "方向 +0.00°  ·  旋转 +0.00 rad/s"
 		else:
-			spin_label.text = "等待本队出手者调整力度与旋转"
+			spin_label.text = "等待 %s 开始调整" % active_player_name
 	elif phase_value == CurlingMatchController.Phase.AIMING:
 		power_caption.visible = false
 		power_bar.visible = false
@@ -942,9 +948,23 @@ func _on_match_hud_changed(data: Dictionary) -> void:
 		spin_label.text = ""
 	_apply_active_aim_cursor_privacy(phase_value)
 	_maybe_play_shot_clock_warning(data, phase_value)
+	key_guide_label.visible = false
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
-		CurlingMatchController.Phase.AIMING: instruction_label.text = "推荐%d%% · 拖拽时 A/D方向 · W/S力度 · Shift慢调" % roundi(CurlingConstants.THROW_RECOMMENDED_POWER * 100.0)
+		CurlingMatchController.Phase.AIMING:
+			if can_adjust_aim:
+				key_guide_label.visible = true
+				key_guide_label.text = "拖拽中  A/D 或 ←/→ 方向 · W/S 或 ↑/↓ 力度 · Shift 精调    瞄准中  Q/E 或滚轮调旋"
+				if aim_dragging:
+					instruction_label.text = "松开左键投出 · 右键取消 · 保持拖拽时可继续键盘微调"
+				else:
+					instruction_label.text = "在壶上按住左键，向目标反方向拖拽 · 推荐%d%%" % roundi(CurlingConstants.THROW_RECOMMENDED_POWER * 100.0)
+			elif can_view_aim:
+				key_guide_label.visible = true
+				key_guide_label.text = "当前仅投壶者可调整 · 出手后本队均可按住左键快速擦冰"
+				instruction_label.text = "本队由 %s 投壶 · 力度、方向和旋转实时共享" % active_player_name
+			else:
+				instruction_label.text = "对方正在瞄准 · 力度、方向、旋转和辅助线已隐藏"
 		CurlingMatchController.Phase.MOVING: instruction_label.text = "镜头自动跟壶 · 壶上方显示剩余秒数 · 左键快速擦冰"
 		CurlingMatchController.Phase.SCORING: instruction_label.text = "测量距离并计算本End得分"
 	_refresh_match_overlay_visibility(phase_value)

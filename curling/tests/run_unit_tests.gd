@@ -489,6 +489,7 @@ func _test_team_aim_privacy_and_geometry() -> void:
 	_expect_close(float(shared_data.get("spin", 0.0)), 1.25, 0.000001, "teammate receives exact aim spin")
 	var teammate_hud_data := teammate_hud["data"] as Dictionary
 	_expect(bool(teammate_hud_data.get("can_view_aim", false)), "teammate HUD is allowed to show tactical values")
+	_expect(not bool(teammate_hud_data.get("can_adjust_aim", true)), "teammate HUD does not advertise throw controls")
 	_expect(bool(teammate_hud_data.get("aim_from_teammate", false)), "teammate HUD marks remote shared aim")
 	_expect_close(float(teammate_hud_data.get("power", 0.0)), 0.77125, 0.000001, "teammate HUD shares power")
 	_expect_close(float(teammate_hud_data.get("aim_offset_degrees", 0.0)), 0.27, 0.00001, "teammate HUD shares aim angle")
@@ -523,6 +524,10 @@ func _test_team_aim_privacy_and_geometry() -> void:
 		heartbeat["spin"] = spin
 	)
 	teammate.active_thrower_id = 3
+	teammate._emit_hud()
+	var thrower_hud_data := teammate_hud["data"] as Dictionary
+	_expect(bool(thrower_hud_data.get("can_adjust_aim", false)), "local thrower HUD advertises aim controls")
+	_expect(not bool(thrower_hud_data.get("aim_dragging", true)), "local thrower HUD starts outside drag adjustment")
 	_expect(teammate.show_aim_preview(shared_direction, 0.76875, -0.8, true), "local thrower preview is accepted")
 	teammate._last_aim_preview_ms = 0
 	teammate._send_local_aim_preview_heartbeat()
@@ -549,6 +554,7 @@ func _test_team_aim_privacy_and_geometry() -> void:
 	var opponent_hud_data := opponent_hud["data"] as Dictionary
 	_expect(not opponent.has_visible_aim_preview(), "opponent never renders tactical aim geometry")
 	_expect(not bool(opponent_hud_data.get("can_view_aim", true)), "opponent HUD cannot reveal aim values")
+	_expect(not bool(opponent_hud_data.get("can_adjust_aim", true)), "opponent HUD does not advertise throw controls")
 	_expect_close(float(opponent_hud_data.get("power", -1.0)), 0.0, 0.000001, "opponent HUD receives no power")
 	_expect_close(float(opponent_hud_data.get("spin", -1.0)), 0.0, 0.000001, "opponent HUD receives no spin")
 	opponent.queue_free()
@@ -579,8 +585,9 @@ func _test_ui_asset_boundary_and_audio_cues() -> void:
 	_expect(
 		curling_scene.contains("GuardStatus")
 		and curling_scene.contains("GuardProgress")
-		and curling_scene.contains("ControlRow"),
-		"match HUD exposes guard status and separates its control row",
+		and curling_scene.contains("ControlRow")
+		and curling_scene.contains("KeyGuide"),
+		"match HUD exposes guard status and separates its control guidance rows",
 	)
 
 	var stone_scene := load("res://curling/game/curling_stone.tscn") as PackedScene
