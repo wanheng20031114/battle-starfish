@@ -1,6 +1,7 @@
 extends SceneTree
 
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
+const CurlingAppScript := preload("res://curling/curling.gd")
 
 var _failures: Array[String] = []
 var _checks := 0
@@ -18,6 +19,8 @@ func _run() -> void:
 	_test_rules()
 	_test_snapshot_codec()
 	_test_throw_input_precision()
+	_test_team_aim_privacy_and_geometry()
+	_test_ui_asset_boundary_and_audio_cues()
 	_test_heat_grid()
 	_test_match_alternation_and_overtime()
 	_test_settings_persistence()
@@ -373,6 +376,198 @@ func _test_throw_input_precision() -> void:
 		"member power maps to the configured authoritative speed",
 	)
 	controller.queue_free()
+
+
+func _test_team_aim_privacy_and_geometry() -> void:
+	var room_players := {
+		1: {"id": 1, "team": CurlingConstants.TEAM_RED, "connected": true},
+		2: {"id": 2, "team": CurlingConstants.TEAM_RED, "connected": true},
+		3: {"id": 3, "team": CurlingConstants.TEAM_BLUE, "connected": true},
+		4: {"id": 4, "team": CurlingConstants.TEAM_RED, "connected": true},
+		5: {"id": 5, "team": CurlingConstants.TEAM_RED, "connected": false},
+	}
+	_expect(
+		CurlingAppScript.team_aim_recipient_ids(
+			room_players, 2, CurlingConstants.TEAM_RED, 1
+		) == [4],
+		"aim preview is routed only to connected same-team remote peers",
+	)
+	var sanitized_launch := CurlingAppScript.sanitize_authoritative_event_for_broadcast({
+		"type": "throw_launched",
+		"shot_id": 7,
+		"player_id": 2,
+		"direction": Vector2.RIGHT,
+		"power": 0.77125,
+		"spin": 1.25,
+	})
+	_expect(not sanitized_launch.has("direction"), "public launch event omits the private aim direction")
+	_expect(not sanitized_launch.has("power"), "public launch event omits the private power")
+	_expect(not sanitized_launch.has("spin"), "public launch event omits the private spin")
+	_expect(int(sanitized_launch.get("shot_id", -1)) == 7, "public launch event keeps its synchronization identity")
+	var cursor_scene := load("res://curling/ui/remote_cursor.tscn") as PackedScene
+	var private_cursor := cursor_scene.instantiate() as CurlingRemoteCursor
+	root.add_child(private_cursor)
+	private_cursor.configure({
+		"id": 2,
+		"nickname": "Thrower",
+		"team": CurlingConstants.TEAM_RED,
+		"color": Color.WHITE,
+	})
+	_expect(private_cursor.visible, "remote cursor starts visible for ordinary shared movement")
+	private_cursor.set_tactical_visibility(false)
+	_expect(not private_cursor.visible, "opponent can hide the active thrower's tactical cursor")
+	private_cursor.configure({
+		"id": 2,
+		"nickname": "Thrower",
+		"team": CurlingConstants.TEAM_RED,
+		"color": Color.WHITE,
+	})
+	private_cursor.set_target(Vector2(240.0, 180.0), true, false)
+	_expect(not private_cursor.visible, "identity refresh and stale cursor packets cannot bypass tactical privacy")
+	private_cursor.set_tactical_visibility(true)
+	_expect(private_cursor.visible, "cursor is restored after the private aiming phase ends")
+	private_cursor.queue_free()
+
+	var players: Array[Dictionary] = [
+		{"id": 1, "nickname": "Thrower", "team": CurlingConstants.TEAM_RED, "join_order": 0, "connected": true, "bot": false},
+		{"id": 2, "nickname": "Opponent", "team": CurlingConstants.TEAM_BLUE, "join_order": 1, "connected": true, "bot": false},
+		{"id": 3, "nickname": "Teammate", "team": CurlingConstants.TEAM_RED, "join_order": 2, "connected": true, "bot": false},
+		{"id": 4, "nickname": "Opponent2", "team": CurlingConstants.TEAM_BLUE, "join_order": 3, "connected": true, "bot": false},
+	]
+	var scene := load("res://curling/game/match_controller.tscn") as PackedScene
+	var teammate := scene.instantiate() as CurlingMatchController
+	root.add_child(teammate)
+	teammate.start_match(players, 1, 3, false, 11991)
+	teammate.phase = CurlingMatchController.Phase.AIMING
+	teammate.direction = 1
+	teammate.active_team = CurlingConstants.TEAM_RED
+	teammate.active_thrower_id = 1
+	teammate.active_stone_id = 0
+	teammate._stones[0].prepare_for_delivery(CurlingConstants.hack_position(1), 1, Color.WHITE)
+	var teammate_hud := {"data": {}}
+	teammate.hud_changed.connect(func(data: Dictionary) -> void: teammate_hud["data"] = data)
+	var shared_direction := Vector2.RIGHT.rotated(deg_to_rad(0.27))
+	_expect(teammate.show_aim_preview(shared_direction, 0.77125, 1.25), "same-team aim preview is accepted")
+	_expect(teammate.has_visible_aim_preview(), "same-team short aim guide is visible")
+	_expect(not teammate.has_method("_predict_path"), "formal match no longer exposes a full path predictor")
+	var shared_data := teammate.get_aim_preview_data()
+	_expect_close(float(shared_data.get("power", 0.0)), 0.77125, 0.000001, "teammate receives exact aim power")
+	_expect_close(float(shared_data.get("spin", 0.0)), 1.25, 0.000001, "teammate receives exact aim spin")
+	var teammate_hud_data := teammate_hud["data"] as Dictionary
+	_expect(bool(teammate_hud_data.get("can_view_aim", false)), "teammate HUD is allowed to show tactical values")
+	_expect(bool(teammate_hud_data.get("aim_from_teammate", false)), "teammate HUD marks remote shared aim")
+	_expect_close(float(teammate_hud_data.get("power", 0.0)), 0.77125, 0.000001, "teammate HUD shares power")
+	_expect_close(float(teammate_hud_data.get("aim_offset_degrees", 0.0)), 0.27, 0.00001, "teammate HUD shares aim angle")
+
+	var positive_geometry := teammate.aim_guide.get_debug_geometry()
+	var straight_start := positive_geometry.get("straight_start", Vector2.ZERO) as Vector2
+	var straight_end := positive_geometry.get("straight_end", Vector2.ZERO) as Vector2
+	var positive_arrow := positive_geometry.get("arrow_direction", Vector2.ZERO) as Vector2
+	var curve_points := positive_geometry.get("curve_points", PackedVector2Array()) as PackedVector2Array
+	_expect(straight_start.distance_to(straight_end) < 430.0, "formal straight guide stays within a partial viewport")
+	_expect(curve_points.size() == 33, "spin guide uses a short sampled dashed curve")
+	_expect(curve_points[-1].distance_to(straight_start) < straight_end.distance_to(straight_start), "spin guide is shorter than the straight guide")
+	_expect(absf(positive_arrow.dot(shared_direction.normalized())) < 0.0001, "spin arrow is perpendicular to the aim line")
+	_expect(shared_direction.cross(positive_arrow) > 0.0, "positive spin arrow points to the positive curl side")
+	_expect(float(positive_geometry.get("guide_angle_degrees", 0.0)) > 0.0, "positive spin has a positive exaggerated guide angle")
+
+	_expect(teammate.show_aim_preview(shared_direction, 0.77125, -1.25), "negative teammate spin preview is accepted")
+	var negative_geometry := teammate.aim_guide.get_debug_geometry()
+	var negative_arrow := negative_geometry.get("arrow_direction", Vector2.ZERO) as Vector2
+	_expect(shared_direction.cross(negative_arrow) < 0.0, "negative spin arrow points to the opposite curl side")
+	_expect(float(negative_geometry.get("guide_angle_degrees", 0.0)) < 0.0, "negative spin has a negative exaggerated guide angle")
+	var heartbeat := {"count": 0, "power": 0.0, "spin": 0.0}
+	teammate.aim_preview_intent.connect(func(_direction: Vector2, power: float, spin: float) -> void:
+		heartbeat["count"] = int(heartbeat["count"]) + 1
+		heartbeat["power"] = power
+		heartbeat["spin"] = spin
+	)
+	teammate.active_thrower_id = 3
+	_expect(teammate.show_aim_preview(shared_direction, 0.76875, -0.8, true), "local thrower preview is accepted")
+	teammate._last_aim_preview_ms = 0
+	teammate._send_local_aim_preview_heartbeat()
+	_expect(int(heartbeat["count"]) == 1, "stationary local aim sends a heartbeat instead of expiring for teammates")
+	_expect_close(float(heartbeat["power"]), 0.76875, 0.000001, "aim heartbeat preserves exact power")
+	_expect_close(float(heartbeat["spin"]), -0.8, 0.000001, "aim heartbeat preserves exact spin")
+	teammate.hide_aim_preview()
+	_expect(not teammate.has_visible_aim_preview(), "team preview can be cleared without leaving a stale guide")
+	teammate.queue_free()
+
+	var opponent := scene.instantiate() as CurlingMatchController
+	root.add_child(opponent)
+	opponent.start_match(players, 1, 2, false, 11992)
+	opponent.phase = CurlingMatchController.Phase.AIMING
+	opponent.direction = 1
+	opponent.active_team = CurlingConstants.TEAM_RED
+	opponent.active_thrower_id = 1
+	opponent.active_stone_id = 0
+	opponent._stones[0].prepare_for_delivery(CurlingConstants.hack_position(1), 1, Color.WHITE)
+	var opponent_hud := {"data": {}}
+	opponent.hud_changed.connect(func(data: Dictionary) -> void: opponent_hud["data"] = data)
+	_expect(not opponent.show_aim_preview(shared_direction, 0.82, 1.5), "opponent aim preview is rejected by the controller")
+	opponent._emit_hud()
+	var opponent_hud_data := opponent_hud["data"] as Dictionary
+	_expect(not opponent.has_visible_aim_preview(), "opponent never renders tactical aim geometry")
+	_expect(not bool(opponent_hud_data.get("can_view_aim", true)), "opponent HUD cannot reveal aim values")
+	_expect_close(float(opponent_hud_data.get("power", -1.0)), 0.0, 0.000001, "opponent HUD receives no power")
+	_expect_close(float(opponent_hud_data.get("spin", -1.0)), 0.0, 0.000001, "opponent HUD receives no spin")
+	opponent.queue_free()
+
+
+func _test_ui_asset_boundary_and_audio_cues() -> void:
+	var main_settings_scene := FileAccess.get_file_as_string(
+		"res://scene/main_menu/main_menu_settings_panel.tscn"
+	)
+	var curling_scene := FileAccess.get_file_as_string("res://curling/curling.tscn")
+	_expect(
+		main_settings_scene.contains("assets/ui_pixel/production/large_sandstone_frame.png"),
+		"main-menu settings keeps its generated sandstone frame",
+	)
+	_expect(
+		main_settings_scene.contains("assets/ui_pixel/production/icons/settings_40/"),
+		"main-menu settings keeps its generated icon family",
+	)
+	_expect(
+		curling_scene.contains("res://curling/ui/geometric_backdrop.tscn"),
+		"curling multiplayer uses the native geometric backdrop",
+	)
+	_expect(
+		not curling_scene.contains("assets/main_menu/")
+		and not curling_scene.contains("assets/ui_pixel/"),
+		"curling multiplayer does not reuse decorative generated images",
+	)
+
+	_expect(CurlingAppScript.SHOT_CLOCK_WARNING_SECONDS.size() == 10, "shot clock has ten warning seconds")
+	for second in range(1, 11):
+		_expect(
+			CurlingAppScript.SHOT_CLOCK_WARNING_SECONDS.has(second),
+			"shot clock warns at %d seconds" % second,
+		)
+
+	var audio_scene := load("res://curling/audio/curling_audio.tscn") as PackedScene
+	var audio := audio_scene.instantiate() as CurlingAudio
+	root.add_child(audio)
+	var cue_players: Array[AudioStreamPlayer] = [
+		audio.ui_player,
+		audio.launch_player,
+		audio.countdown_player,
+		audio.result_player,
+		audio.alert_player,
+		audio.impact_player,
+		audio.sweep_player,
+	]
+	for player in cue_players:
+		_expect(player.stream is AudioStreamWAV, "%s has a generated PCM cue" % player.name)
+		_expect((player.stream as AudioStreamWAV).data.size() > 1000, "%s cue contains audible samples" % player.name)
+	var distinct_streams := {}
+	for player in cue_players:
+		distinct_streams[(player.stream as AudioStreamWAV).get_instance_id()] = true
+	_expect(distinct_streams.size() == cue_players.size(), "gameplay cues do not reuse the UI click stream")
+	_expect(
+		CurlingAudio.countdown_pitch_for_second(1) > CurlingAudio.countdown_pitch_for_second(10),
+		"countdown pitch increases toward one second",
+	)
+	audio.free()
 
 
 func _test_heat_grid() -> void:

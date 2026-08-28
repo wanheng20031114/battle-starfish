@@ -10,6 +10,7 @@ var sweeping := false
 var _from_position := Vector2.ZERO
 var _target_position := Vector2.ZERO
 var _target_time_ms := 0
+var _tactical_visibility_allowed := true
 
 @onready var name_label: Label = $Name
 
@@ -27,7 +28,7 @@ func configure(identity: Dictionary) -> void:
 	personal_color = identity.get("color", Color.WHITE)
 	name_label.text = nickname
 	name_label.add_theme_color_override("font_color", personal_color)
-	visible = player_id > 0
+	visible = player_id > 0 and _tactical_visibility_allowed
 	queue_redraw()
 
 
@@ -37,13 +38,24 @@ func set_target(screen_position: Vector2, pressed: bool, is_sweeping: bool) -> v
 	_target_time_ms = Time.get_ticks_msec()
 	mouse_down = pressed
 	sweeping = is_sweeping
-	visible = player_id > 0
+	visible = player_id > 0 and _tactical_visibility_allowed
 	set_process(true)
+	queue_redraw()
+
+
+func set_tactical_visibility(allowed: bool) -> void:
+	_tactical_visibility_allowed = allowed
+	visible = player_id > 0 and allowed
+	if not allowed:
+		mouse_down = false
+		sweeping = false
+		set_process(false)
 	queue_redraw()
 
 
 func clear_identity() -> void:
 	player_id = 0
+	_tactical_visibility_allowed = true
 	visible = false
 
 

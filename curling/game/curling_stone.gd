@@ -15,9 +15,16 @@ var heat_grid: CurlingHeatGrid
 var remote_target_position := Vector2.ZERO
 var remote_target_rotation := 0.0
 var remote_target_velocity := Vector2.ZERO
+var inspection_selected := false
 var _remote_samples: Array[Dictionary] = []
 var _in_play_collision_layer := 1
 var _in_play_collision_mask := 1
+var _telemetry_heat := 0.0
+var _telemetry_drag_acceleration_mps2 := 0.0
+var _telemetry_drag_force_n := 0.0
+var _telemetry_curl_acceleration_mps2 := 0.0
+var _telemetry_curl_force_n := 0.0
+var _telemetry_collision_impulse_ns := 0.0
 
 @onready var slide_time_marker: Node2D = $SlideTimeMarker
 @onready var slide_time_label: Label = $SlideTimeMarker/Time
@@ -48,23 +55,34 @@ func _physics_process(_delta: float) -> void:
 
 
 func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+	_telemetry_collision_impulse_ns = 0.0
+	for contact_index in range(state.get_contact_count()):
+		_telemetry_collision_impulse_ns += (
+			state.get_contact_impulse(contact_index).length()
+			/ CurlingConstants.PIXELS_PER_METER
+		)
 	if not authoritative or not in_play or freeze:
+		_reset_force_telemetry()
 		return
 	var velocity := state.linear_velocity
 	var speed := velocity.length()
 	if speed <= CurlingConstants.STOP_SPEED_PXPS:
+		_reset_force_telemetry()
 		return
 	var direction := velocity / speed
 	var heat := 0.0
 	if active_delivered_stone and heat_grid != null:
 		heat = heat_grid.sample_heat(state.transform.origin)
-	# 以速度相关的阻尼系数让Godot原生线性阻尼产生近似恒定的冰面滚阻；
-	# 满热时只降低该原生阻尼，不自行改写速度积分。
-	linear_damp = (
+	var drag_acceleration_pxps2 := (
 		CurlingConstants.BASE_DRAG_PXPS2
 		* (1.0 - CurlingConstants.SWEEP_DRAG_REDUCTION * heat)
-		/ maxf(speed, CurlingConstants.STOP_SPEED_PXPS)
 	)
+	# 以速度相关的阻尼系数让Godot原生线性阻尼产生近似恒定的冰面滚阻；
+	# 满热时只降低该原生阻尼，不自行改写速度积分。
+	linear_damp = drag_acceleration_pxps2 / maxf(speed, CurlingConstants.STOP_SPEED_PXPS)
+	_telemetry_heat = heat
+	_telemetry_drag_acceleration_mps2 = drag_acceleration_pxps2 / CurlingConstants.PIXELS_PER_METER
+	_telemetry_drag_force_n = mass * _telemetry_drag_acceleration_mps2
 
 	# Curl只旋转速度方向，不改变速度大小；停止时间和总路径仍由初速、阻尼与擦冰热量决定。
 	# 曲线路径沿原瞄准方向的投影会略短，这不是额外阻力。
@@ -77,12 +95,15 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		* low_speed_factor
 		* curl_multiplier
 	)
+	_telemetry_curl_acceleration_mps2 = curl_acceleration / CurlingConstants.PIXELS_PER_METER
+	_telemetry_curl_force_n = mass * _telemetry_curl_acceleration_mps2
 	var turn_radians := curl_acceleration / maxf(speed, CurlingConstants.STOP_SPEED_PXPS) * state.step
 	state.linear_velocity = direction.rotated(turn_radians) * speed
 
 
 func prepare_for_delivery(position: Vector2, owner_id: int, player_color: Color) -> void:
 	_remote_samples.clear()
+	_reset_physics_telemetry()
 	owner_player_id = owner_id
 	owner_color = player_color
 	in_play = true
@@ -114,6 +135,7 @@ func launch(direction: Vector2, speed_mps: float, spin_radps: float) -> void:
 
 func remove_from_play() -> void:
 	_remote_samples.clear()
+	_reset_physics_telemetry()
 	in_play = false
 	active_delivered_stone = false
 	linear_velocity = Vector2.ZERO
@@ -126,6 +148,7 @@ func remove_from_play() -> void:
 
 
 func freeze_at_rest() -> void:
+	_reset_physics_telemetry()
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
 	linear_damp = 0.0
@@ -147,6 +170,7 @@ func enable_for_shot() -> void:
 
 func restore_authoritative_state(snapshot: Dictionary) -> void:
 	_remote_samples.clear()
+	_reset_physics_telemetry()
 	in_play = bool(snapshot.get("in_play", false))
 	visible = in_play
 	freeze = true
@@ -290,6 +314,31 @@ func export_state() -> Dictionary:
 	}
 
 
+func get_physics_telemetry() -> Dictionary:
+	var velocity_px := linear_velocity if authoritative else remote_target_velocity
+	var velocity_mps := velocity_px / CurlingConstants.PIXELS_PER_METER
+	return {
+		"speed_mps": velocity_mps.length(),
+		"velocity_mps": velocity_mps,
+		"angular_velocity_radps": angular_velocity,
+		"heat": _telemetry_heat,
+		"linear_damp_per_sec": linear_damp,
+		"drag_acceleration_mps2": _telemetry_drag_acceleration_mps2,
+		"drag_force_n": _telemetry_drag_force_n,
+		"curl_acceleration_mps2": _telemetry_curl_acceleration_mps2,
+		"curl_force_n": _telemetry_curl_force_n,
+		"collision_impulse_ns": _telemetry_collision_impulse_ns,
+		"remaining_sec": estimated_remaining_slide_time(),
+	}
+
+
+func set_inspection_selected(selected: bool) -> void:
+	if inspection_selected == selected:
+		return
+	inspection_selected = selected
+	queue_redraw()
+
+
 func _on_body_entered(body: Node) -> void:
 	if in_play and body is CurlingStone:
 		var other := body as CurlingStone
@@ -301,6 +350,19 @@ func _on_body_entered(body: Node) -> void:
 func _set_collision_active(enabled: bool) -> void:
 	collision_layer = _in_play_collision_layer if enabled else 0
 	collision_mask = _in_play_collision_mask if enabled else 0
+
+
+func _reset_force_telemetry() -> void:
+	_telemetry_heat = 0.0
+	_telemetry_drag_acceleration_mps2 = 0.0
+	_telemetry_drag_force_n = 0.0
+	_telemetry_curl_acceleration_mps2 = 0.0
+	_telemetry_curl_force_n = 0.0
+
+
+func _reset_physics_telemetry() -> void:
+	_reset_force_telemetry()
+	_telemetry_collision_impulse_ns = 0.0
 
 
 func _draw() -> void:
@@ -316,3 +378,14 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, 4.2, owner_color)
 	draw_arc(Vector2.ZERO, 4.2, 0.0, TAU, 20, Color("102132"), 1.2)
 	draw_line(Vector2(-5, -3), Vector2(5, -3), Color("f8fbfc"), 3.0, true)
+	if inspection_selected:
+		draw_arc(
+			Vector2.ZERO,
+			CurlingConstants.STONE_RADIUS_PX + 6.0,
+			0.0,
+			TAU,
+			40,
+			CurlingConstants.CYAN_ACCENT,
+			3.0,
+			true
+		)

@@ -172,6 +172,22 @@ mouse_default_cursor_shape = 2
 text = "冰壶"
 alignment = 0
 
+[node name="CurlingSandboxSlot" type="Control" parent="Content/Menu"]
+custom_minimum_size = Vector2(336, 50)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="CurlingSandboxButton" type="Button" parent="Content/Menu/CurlingSandboxSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_default_cursor_shape = 2
+text = "冰壶单人测试"
+alignment = 0
+
 [node name="SettingsSlot" type="Control" parent="Content/Menu"]
 custom_minimum_size = Vector2(336, 50)
 layout_mode = 2
@@ -218,5 +234,6 @@ settings_path = NodePath("../CurlingSettings")
 
 [connection signal="pressed" from="Content/Menu/TestSceneSlot/TestSceneButton" to="." method="_on_test_scene_pressed"]
 [connection signal="pressed" from="Content/Menu/CurlingSlot/CurlingButton" to="." method="_on_curling_pressed"]
+[connection signal="pressed" from="Content/Menu/CurlingSandboxSlot/CurlingSandboxButton" to="." method="_on_curling_sandbox_pressed"]
 [connection signal="pressed" from="Content/Menu/SettingsSlot/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="Content/Menu/QuitSlot/QuitButton" to="." method="_on_quit_pressed"]

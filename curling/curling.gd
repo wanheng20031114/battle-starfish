@@ -4,7 +4,7 @@ class_name CurlingApp
 const SESSION_FILE := "user://curling_session.json"
 const MAIN_MENU_SCENE := "res://scene/main_menu/main_menu.tscn"
 const LEAVE_ACK_TIMEOUT_MS := 1500
-const SHOT_CLOCK_WARNING_SECONDS := [10, 5, 4, 3, 2, 1]
+const SHOT_CLOCK_WARNING_SECONDS := [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
 const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
 const CurlingManualPanelScript := preload("res://curling/manual/curling_manual_panel.gd")
@@ -103,6 +103,7 @@ var _leaving_room := false
 var _leave_ack_deadline_ms := 0
 var _last_shot_clock_warning_shot_id := -1
 var _last_shot_clock_warning_second := -1
+var _tactically_hidden_cursor_id := 0
 
 
 func _ready() -> void:
@@ -245,6 +246,7 @@ func _connect_runtime() -> void:
 		_send_to_host(CurlingConstants.CH_GAMEPLAY, {"type": "throw", "direction": direction, "power": power, "spin": spin})
 	)
 	match_controller.aim_preview_intent.connect(_on_local_aim_preview)
+	match_controller.aim_preview_clear_intent.connect(_on_local_aim_preview_cleared)
 	match_controller.sweep_intent.connect(func(from_world: Vector2, to_world: Vector2, delta_sec: float, host_ms: int) -> void:
 		var estimated_host_ms := _network_clock.estimated_host_time_ms() if net.is_online() and not net.is_host() else host_ms
 		_send_to_host(CurlingConstants.CH_SWEEP, {"type": "sweep", "from": from_world, "to": to_world, "delta": delta_sec, "host_ms": estimated_host_ms})
@@ -517,22 +519,62 @@ func _handle_gameplay_message(sender: int, message: Dictionary) -> void:
 
 
 func _handle_aim_message(sender: int, message: Dictionary) -> void:
-	if str(message.get("type", "")) != "aim":
+	var type := str(message.get("type", ""))
+	if type not in ["aim", "aim_clear"]:
 		return
 	if net.is_host():
-		if sender != match_controller.active_thrower_id:
+		if (
+			sender != match_controller.active_thrower_id
+			or int(message.get("shot_id", -1)) != match_controller.shot_id
+			or not _room_players.has(sender)
+			or int((_room_players[sender] as Dictionary).get("team", CurlingConstants.TEAM_NONE)) != match_controller.active_team
+		):
+			return
+		if type == "aim_clear":
+			if match_controller.get_local_team() == match_controller.active_team:
+				match_controller.hide_aim_preview()
+			_host_forward_team_aim(sender, {
+				"type": "aim_clear",
+				"origin": sender,
+				"shot_id": match_controller.shot_id,
+			})
 			return
 		var direction_value: Variant = message.get("direction")
 		var power := float(message.get("power", -1.0))
 		var spin := float(message.get("spin", INF))
 		if not direction_value is Vector2 or not (direction_value as Vector2).is_finite() or (direction_value as Vector2).length_squared() < 0.9 or power < 0.0 or power > 1.0 or absf(spin) > CurlingConstants.MAX_SPIN_RADPS + 0.001:
 			return
-		match_controller.show_aim_preview(direction_value as Vector2, power, spin)
-		var forwarded := message.duplicate(true)
-		forwarded["origin"] = sender
-		_send_packet(CurlingConstants.CH_AIM_PREVIEW, 0, forwarded)
+		var normalized_direction := (direction_value as Vector2).normalized()
+		if match_controller.get_local_team() == match_controller.active_team:
+			match_controller.show_aim_preview(normalized_direction, power, spin)
+		else:
+			match_controller.hide_aim_preview()
+		_host_forward_team_aim(sender, {
+			"type": "aim",
+			"origin": sender,
+			"shot_id": match_controller.shot_id,
+			"direction": normalized_direction,
+			"power": power,
+			"spin": spin,
+		})
 	elif sender == net.host_peer_id:
-		match_controller.show_aim_preview(message.get("direction", Vector2.RIGHT), float(message.get("power", 0.0)), float(message.get("spin", 0.0)))
+		if (
+			int(message.get("origin", 0)) != match_controller.active_thrower_id
+			or int(message.get("shot_id", -1)) != match_controller.shot_id
+		):
+			return
+		if match_controller.get_local_team() != match_controller.active_team:
+			match_controller.hide_aim_preview()
+			return
+		if type == "aim_clear":
+			match_controller.hide_aim_preview()
+			return
+		var direction_value: Variant = message.get("direction")
+		var power := float(message.get("power", -1.0))
+		var spin := float(message.get("spin", INF))
+		if not direction_value is Vector2 or not (direction_value as Vector2).is_finite() or (direction_value as Vector2).length_squared() < 0.9 or power < 0.0 or power > 1.0 or absf(spin) > CurlingConstants.MAX_SPIN_RADPS + 0.001:
+			return
+		match_controller.show_aim_preview((direction_value as Vector2).normalized(), power, spin)
 
 
 func _handle_sweep_message(sender: int, message: Dictionary) -> void:
@@ -562,7 +604,14 @@ func _handle_cursor_message(sender: int, message: Dictionary) -> void:
 		_cursor_last_received_ms[sender] = now_ms
 		var forwarded := message.duplicate(true)
 		forwarded["origin"] = sender
-		_send_packet(CurlingConstants.CH_CURSOR, 0, forwarded)
+		_host_forward_cursor(sender, forwarded)
+		if _can_local_view_cursor(sender):
+			_update_remote_cursor(sender, forwarded)
+		else:
+			_hide_remote_cursor(sender)
+		return
+	if not net.is_host() and sender != net.host_peer_id:
+		return
 	_update_remote_cursor(origin, message)
 
 
@@ -743,11 +792,80 @@ func _on_tactics_confirm_pressed() -> void:
 
 
 func _on_local_aim_preview(direction: Vector2, power: float, spin: float) -> void:
+	var message := {
+		"type": "aim",
+		"origin": net.local_peer_id,
+		"shot_id": match_controller.shot_id,
+		"direction": direction.normalized(),
+		"power": power,
+		"spin": spin,
+	}
 	if net.is_online():
 		if net.is_host():
-			_send_packet(CurlingConstants.CH_AIM_PREVIEW, 0, {"type": "aim", "origin": net.local_peer_id, "direction": direction, "power": power, "spin": spin})
+			_host_forward_team_aim(net.local_peer_id, message)
 		else:
-			_send_to_host(CurlingConstants.CH_AIM_PREVIEW, {"type": "aim", "direction": direction, "power": power, "spin": spin})
+			_send_to_host(CurlingConstants.CH_AIM_PREVIEW, message)
+
+
+func _on_local_aim_preview_cleared() -> void:
+	var message := {
+		"type": "aim_clear",
+		"origin": net.local_peer_id,
+		"shot_id": match_controller.shot_id,
+	}
+	if not net.is_online():
+		return
+	if net.is_host():
+		_host_forward_team_aim(net.local_peer_id, message)
+	else:
+		_send_to_host(CurlingConstants.CH_AIM_PREVIEW, message)
+
+
+func _host_forward_team_aim(origin_player_id: int, message: Dictionary) -> void:
+	for peer_id in team_aim_recipient_ids(
+		_room_players,
+		origin_player_id,
+		match_controller.active_team,
+		net.local_peer_id
+	):
+		_send_packet(CurlingConstants.CH_AIM_PREVIEW, peer_id, message)
+
+
+func _host_forward_cursor(origin_player_id: int, message: Dictionary) -> void:
+	if not _is_private_aim_cursor(origin_player_id):
+		_send_packet(CurlingConstants.CH_CURSOR, 0, message)
+		return
+	for peer_id in team_aim_recipient_ids(
+		_room_players,
+		origin_player_id,
+		match_controller.active_team,
+		net.local_peer_id
+	):
+		_send_packet(CurlingConstants.CH_CURSOR, peer_id, message)
+
+
+static func team_aim_recipient_ids(
+	room_players: Dictionary,
+	origin_player_id: int,
+	active_team: int,
+	local_peer_id: int
+) -> Array[int]:
+	var recipients: Array[int] = []
+	for player_id_variant in room_players.keys():
+		var player_id := int(player_id_variant)
+		if player_id in [origin_player_id, local_peer_id]:
+			continue
+		var player_variant: Variant = room_players[player_id_variant]
+		if typeof(player_variant) != TYPE_DICTIONARY:
+			continue
+		var player := player_variant as Dictionary
+		if (
+			int(player.get("team", CurlingConstants.TEAM_NONE)) == active_team
+			and bool(player.get("connected", true))
+		):
+			recipients.append(player_id)
+	recipients.sort()
+	return recipients
 
 
 func _on_authoritative_heat_segment(from_world: Vector2, to_world: Vector2, speed_mps: float, sample_ms: int) -> void:
@@ -770,18 +888,41 @@ func _broadcast_match_state() -> void:
 
 
 func _on_match_hud_changed(data: Dictionary) -> void:
+	var phase_value := int(data.get("phase", CurlingMatchController.Phase.IDLE))
+	var remaining_time := float(data.get("time", 0.0))
 	score_label.text = "红 %d  —  %d 蓝" % [int(data.get("red_score", 0)), int(data.get("blue_score", 0))]
 	end_label.text = "END %d / %d" % [int(data.get("end", 1)), int(data.get("scheduled_ends", 1))]
-	timer_label.text = "%02d" % ceili(float(data.get("time", 0.0)))
+	timer_label.text = "%02d" % ceili(remaining_time)
+	timer_label.add_theme_color_override(
+		"font_color",
+		Color("e4565f")
+		if phase_value == CurlingMatchController.Phase.AIMING and remaining_time <= 10.0
+		else Color("0f7a80")
+	)
 	active_label.text = "%s · %s" % [str(data.get("phase_name", "")), str(data.get("active_player", ""))]
 	team_status_label.text = "后手 %s  ·  本手 %s\n已投 %d / 16" % [CurlingConstants.team_name(int(data.get("hammer_team", 0))), CurlingConstants.team_name(int(data.get("active_team", 0))), int(data.get("delivered", 0))]
-	power_bar.value = float(data.get("power", 0.0)) * 100.0
-	spin_label.text = "力%.2f%% · 向%+0.02f° · 旋%+0.2frad/s" % [
-		float(data.get("power", 0.0)) * 100.0,
-		float(data.get("aim_offset_degrees", 0.0)),
-		float(data.get("spin", 0.0)),
-	]
-	var phase_value := int(data.get("phase", CurlingMatchController.Phase.IDLE))
+	var can_view_aim := bool(data.get("can_view_aim", false))
+	var aim_visible := bool(data.get("aim_visible", false))
+	if phase_value == CurlingMatchController.Phase.AIMING and can_view_aim:
+		power_bar.visible = true
+		power_bar.value = float(data.get("power", 0.0)) * 100.0
+		if aim_visible:
+			spin_label.text = "力%.2f%% · 向%+0.02f° · 旋%+0.2frad/s" % [
+				float(data.get("power", 0.0)) * 100.0,
+				float(data.get("aim_offset_degrees", 0.0)),
+				float(data.get("spin", 0.0)),
+			]
+		else:
+			spin_label.text = "等待本队出手者调整力度与旋转"
+	elif phase_value == CurlingMatchController.Phase.AIMING:
+		power_bar.visible = false
+		power_bar.value = 0.0
+		spin_label.text = "对方正在瞄准 · 战术参数隐藏"
+	else:
+		power_bar.visible = false
+		power_bar.value = 0.0
+		spin_label.text = ""
+	_apply_active_aim_cursor_privacy(phase_value)
 	_maybe_play_shot_clock_warning(data, phase_value)
 	match phase_value:
 		CurlingMatchController.Phase.TACTICS: instruction_label.text = "私密分配投壶位，确认后锁定"
@@ -807,7 +948,7 @@ func _maybe_play_shot_clock_warning(data: Dictionary, phase_value: int) -> void:
 	if remaining_second == _last_shot_clock_warning_second:
 		return
 	_last_shot_clock_warning_second = remaining_second
-	audio.play_countdown(remaining_second <= 5)
+	audio.play_countdown(remaining_second)
 
 
 func _reset_shot_clock_warning() -> void:
@@ -817,22 +958,50 @@ func _reset_shot_clock_warning() -> void:
 
 func _on_gameplay_event(event: Dictionary) -> void:
 	if net.is_online() and net.is_host():
-		_send_packet(CurlingConstants.CH_GAMEPLAY, 0, {"type": "authoritative_event", "event": event})
+		_send_packet(CurlingConstants.CH_GAMEPLAY, 0, {
+			"type": "authoritative_event",
+			"event": sanitize_authoritative_event_for_broadcast(event),
+		})
 	var type := str(event.get("type", ""))
+	var notice := ""
 	match type:
 		"throw_launched":
-			_last_gameplay_notice = "%s 已出手" % match_controller.player_name(int(event.get("player_id", 0)))
+			notice = "%s 已出手" % match_controller.player_name(int(event.get("player_id", 0)))
 			audio.play_launch()
-		"empty_throw": _last_gameplay_notice = str(event.get("reason", "空投"))
-		"hog_violation": _last_gameplay_notice = "未越过hog line，冰壶移出场外"
-		"free_guard_violation": _last_gameplay_notice = "五壶保护区违规，已恢复投壶前位置"
-		"no_tick_violation": _last_gameplay_notice = "中线保护壶违规，已恢复投壶前位置"
+		"empty_throw":
+			notice = str(event.get("reason", "空投"))
+			audio.play_rule_warning()
+		"hog_violation":
+			notice = "未越过hog line，冰壶移出场外"
+			audio.play_rule_warning()
+		"free_guard_violation":
+			notice = "五壶保护区违规，已恢复投壶前位置"
+			audio.play_rule_warning()
+		"no_tick_violation":
+			notice = "中线保护壶违规，已恢复投壶前位置"
+			audio.play_rule_warning()
+		"stone_out":
+			notice = "冰壶已越出场地边界"
+			audio.play_stone_out()
 		"end_scored":
-			_last_gameplay_notice = "%s获得%d分" % [CurlingConstants.team_name(int(event.get("team", 0))), int(event.get("points", 0))]
+			notice = "%s获得%d分" % [CurlingConstants.team_name(int(event.get("team", 0))), int(event.get("points", 0))]
 			audio.play_score()
+		"forfeit":
+			notice = str(event.get("reason", "队伍判负"))
+			audio.play_rule_warning()
 		"impact": audio.play_impact(float(event.get("speed", 0.0)))
-	if not _last_gameplay_notice.is_empty():
-		instruction_label.text = _last_gameplay_notice
+	if not notice.is_empty():
+		_last_gameplay_notice = notice
+		instruction_label.text = notice
+
+
+static func sanitize_authoritative_event_for_broadcast(event: Dictionary) -> Dictionary:
+	var sanitized := event.duplicate(true)
+	if str(sanitized.get("type", "")) == "throw_launched":
+		sanitized.erase("direction")
+		sanitized.erase("power")
+		sanitized.erase("spin")
+	return sanitized
 
 
 func _on_match_finished(result: Dictionary) -> void:
@@ -957,7 +1126,7 @@ func _send_cursor() -> void:
 	}
 	if net.is_host():
 		message["origin"] = net.local_peer_id
-		_send_packet(CurlingConstants.CH_CURSOR, 0, message)
+		_host_forward_cursor(net.local_peer_id, message)
 	else:
 		_send_to_host(CurlingConstants.CH_CURSOR, message)
 
@@ -965,9 +1134,13 @@ func _send_cursor() -> void:
 func _update_remote_cursor(player_id: int, message: Dictionary) -> void:
 	if player_id == (1 if _demo_mode else net.local_peer_id) or not _room_players.has(player_id):
 		return
+	if not _can_local_view_cursor(player_id):
+		_hide_remote_cursor(player_id)
+		return
 	var cursor := _cursor_for_player(player_id)
 	if cursor == null:
 		return
+	cursor.set_tactical_visibility(true)
 	var raw_position: Vector2 = message.get("position", Vector2.ZERO)
 	var screen_position := Vector2.ZERO
 	if str(message.get("context", "ui")) == "world":
@@ -975,6 +1148,46 @@ func _update_remote_cursor(player_id: int, message: Dictionary) -> void:
 	else:
 		screen_position = raw_position * get_viewport().get_visible_rect().size
 	cursor.set_target(screen_position, bool(message.get("pressed", false)), bool(message.get("sweeping", false)))
+
+
+func _is_private_aim_cursor(player_id: int) -> bool:
+	return (
+		match_controller.phase in [
+			CurlingMatchController.Phase.AIMING,
+			CurlingMatchController.Phase.MOVING,
+		]
+		and player_id == match_controller.active_thrower_id
+		and match_controller.active_team != CurlingConstants.TEAM_NONE
+	)
+
+
+func _can_local_view_cursor(player_id: int) -> bool:
+	return (
+		not _is_private_aim_cursor(player_id)
+		or match_controller.get_local_team() == match_controller.active_team
+	)
+
+
+func _hide_remote_cursor(player_id: int) -> void:
+	if _cursor_by_player.has(player_id):
+		(_cursor_by_player[player_id] as CurlingRemoteCursor).set_tactical_visibility(false)
+
+
+func _apply_active_aim_cursor_privacy(phase_value: int) -> void:
+	var hidden_player_id := 0
+	if (
+		phase_value in [
+			CurlingMatchController.Phase.AIMING,
+			CurlingMatchController.Phase.MOVING,
+		]
+		and match_controller.get_local_team() != match_controller.active_team
+		and match_controller.active_thrower_id != net.local_peer_id
+	):
+		hidden_player_id = match_controller.active_thrower_id
+	if _tactically_hidden_cursor_id != hidden_player_id:
+		_tactically_hidden_cursor_id = hidden_player_id
+	if hidden_player_id > 0:
+		_hide_remote_cursor(hidden_player_id)
 
 
 func _cursor_for_player(player_id: int) -> CurlingRemoteCursor:
@@ -1000,6 +1213,7 @@ func _sync_remote_cursor_identities() -> void:
 
 
 func _clear_remote_cursors() -> void:
+	_tactically_hidden_cursor_id = 0
 	_cursor_by_player.clear()
 	for cursor in _remote_cursors:
 		cursor.clear_identity()

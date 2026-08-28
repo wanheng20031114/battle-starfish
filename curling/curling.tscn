@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://curling/curling.gd" id="1_app"]
 [ext_resource type="Theme" path="res://curling/ui/curling_theme.tres" id="2_theme"]
@@ -6,16 +6,14 @@
 [ext_resource type="Script" path="res://curling/network/relay_endpoint.gd" id="4_relay"]
 [ext_resource type="Script" path="res://curling/network/lan_discovery.gd" id="5_lan"]
 [ext_resource type="Script" path="res://curling/network/public_lobby_client.gd" id="6_public"]
-[ext_resource type="Script" path="res://curling/audio/curling_audio.gd" id="7_audio"]
+[ext_resource type="PackedScene" path="res://curling/audio/curling_audio.tscn" id="7_audio"]
 [ext_resource type="PackedScene" path="res://curling/game/match_controller.tscn" id="8_match"]
 [ext_resource type="Script" path="res://curling/ui/minimap.gd" id="9_minimap"]
 [ext_resource type="PackedScene" path="res://curling/ui/remote_cursor.tscn" id="10_cursor"]
 [ext_resource type="Script" path="res://curling/settings/curling_settings.gd" id="11_settings"]
 [ext_resource type="PackedScene" path="res://curling/settings/curling_settings_panel.tscn" id="12_settings_panel"]
-[ext_resource type="Texture2D" path="res://assets/main_menu/selected/shallow_tidal_arch_background.png" id="13_background"]
+[ext_resource type="PackedScene" path="res://curling/ui/geometric_backdrop.tscn" id="13_background"]
 [ext_resource type="PackedScene" path="res://curling/manual/curling_manual_panel.tscn" id="14_manual_panel"]
-[ext_resource type="Texture2D" path="res://assets/ui_pixel/production/large_sandstone_frame.png" id="15_tactics_frame"]
-[ext_resource type="PackedScene" path="res://curling/ui/components/sandstone_button.tscn" id="16_sandstone_button"]
 [ext_resource type="FontFile" path="res://assets/fonts/ZCOOLKuaiLe-Regular.ttf" id="17_display_font"]
 
 [sub_resource type="StyleBoxFlat" id="Top_bar"]
@@ -30,7 +28,19 @@ corner_radius_top_right = 8
 corner_radius_bottom_left = 8
 corner_radius_bottom_right = 8
 
-[sub_resource type="StyleBoxEmpty" id="Pixel_frame_empty"]
+[sub_resource type="StyleBoxFlat" id="Tactics_panel"]
+bg_color = Color(0.957, 0.866, 0.624, 0.98)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.35, 0.55, 0.53, 0.82)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0.035, 0.13, 0.17, 0.3)
+shadow_size = 12
 
 [node name="Curling" type="Node"]
 script = ExtResource("1_app")
@@ -54,21 +64,7 @@ timeout = 10.0
 [node name="CurlingSettings" type="Node" parent="."]
 script = ExtResource("11_settings")
 
-[node name="CurlingAudio" type="Node" parent="."]
-script = ExtResource("7_audio")
-
-[node name="Ui" type="AudioStreamPlayer" parent="CurlingAudio"]
-bus = &"SFX"
-volume_db = -9.0
-
-[node name="Impact" type="AudioStreamPlayer" parent="CurlingAudio"]
-bus = &"SFX"
-volume_db = -5.0
-max_polyphony = 4
-
-[node name="Sweep" type="AudioStreamPlayer" parent="CurlingAudio"]
-bus = &"SFX"
-volume_db = -12.0
+[node name="CurlingAudio" parent="." instance=ExtResource("7_audio")]
 
 [node name="MatchController" parent="." instance=ExtResource("8_match")]
 
@@ -85,17 +81,7 @@ grow_vertical = 2
 texture_filter = 2
 theme = ExtResource("2_theme")
 
-[node name="Background" type="TextureRect" parent="UI/UsernameScreen"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = ExtResource("13_background")
-expand_mode = 1
-stretch_mode = 6
+[node name="Background" parent="UI/UsernameScreen" instance=ExtResource("13_background")]
 
 [node name="Wash" type="ColorRect" parent="UI/UsernameScreen"]
 layout_mode = 1
@@ -194,17 +180,7 @@ grow_vertical = 2
 texture_filter = 2
 theme = ExtResource("2_theme")
 
-[node name="Background" type="TextureRect" parent="UI/LobbyScreen"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = ExtResource("13_background")
-expand_mode = 1
-stretch_mode = 6
+[node name="Background" parent="UI/LobbyScreen" instance=ExtResource("13_background")]
 
 [node name="Backdrop" type="ColorRect" parent="UI/LobbyScreen"]
 layout_mode = 1
@@ -445,17 +421,7 @@ grow_vertical = 2
 texture_filter = 2
 theme = ExtResource("2_theme")
 
-[node name="Background" type="TextureRect" parent="UI/RoomScreen"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = ExtResource("13_background")
-expand_mode = 1
-stretch_mode = 6
+[node name="Background" parent="UI/RoomScreen" instance=ExtResource("13_background")]
 
 [node name="Backdrop" type="ColorRect" parent="UI/RoomScreen"]
 layout_mode = 1
@@ -646,29 +612,17 @@ offset_right = 460.0
 offset_bottom = 330.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("Pixel_frame_empty")
-
-[node name="Frame" type="TextureRect" parent="UI/TacticsScreen/Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = ExtResource("15_tactics_frame")
-expand_mode = 1
-stretch_mode = 5
+theme_override_styles/panel = SubResource("Tactics_panel")
 
 [node name="Layout" type="VBoxContainer" parent="UI/TacticsScreen/Panel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 86.0
-offset_top = 42.0
-offset_right = -86.0
-offset_bottom = -34.0
+offset_left = 44.0
+offset_top = 34.0
+offset_right = -44.0
+offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 10
@@ -705,15 +659,16 @@ layout_mode = 2
 size_flags_vertical = 3
 allow_reselect = true
 
-[node name="Confirm" parent="UI/TacticsScreen/Panel/Layout" instance=ExtResource("16_sandstone_button")]
-custom_minimum_size = Vector2(0, 56)
+[node name="Confirm" type="Button" parent="UI/TacticsScreen/Panel/Layout"]
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-display_text = "确认本队安排"
+text = "确认本队安排"
 
-[node name="ExitRoom" parent="UI/TacticsScreen/Panel/Layout" instance=ExtResource("16_sandstone_button")]
-custom_minimum_size = Vector2(0, 56)
+[node name="ExitRoom" type="Button" parent="UI/TacticsScreen/Panel/Layout"]
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-display_text = "退出房间"
+theme_override_colors/font_color = Color(0.55, 0.17, 0.13, 1)
+text = "退出房间"
 
 [node name="MatchHUD" type="Control" parent="UI"]
 visible = false

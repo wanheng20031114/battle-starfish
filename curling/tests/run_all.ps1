@@ -24,6 +24,7 @@ try {
     Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/native_physics_test.tscn") $workspace
     Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/stone_lifecycle_test.tscn") $workspace
     Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/native_calibration_test.tscn") $workspace
+    Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/sandbox_mode_test.tscn") $workspace
     Invoke-TrackedProcess $Godot @("--headless", "--fixed-fps", "60", "--path", $workspace, "--scene", "res://curling/tests/spin_distance_matrix_test.tscn") $workspace
     Invoke-TrackedProcess "python" @("-m", "venv", $venvRoot) $serverRoot
     $testPython = Join-Path $venvRoot "Scripts\python.exe"

@@ -1,9 +1,12 @@
 extends Node2D
 class_name CurlingMatchController
 
+const CurlingAimGuideScript := preload("res://curling/ui/aim_guide.gd")
+
 signal state_changed
 signal hud_changed(data: Dictionary)
 signal aim_preview_intent(direction: Vector2, power: float, spin: float)
+signal aim_preview_clear_intent
 signal throw_intent(direction: Vector2, power: float, spin: float)
 signal sweep_intent(from_world: Vector2, to_world: Vector2, delta_sec: float, estimated_host_ms: int)
 signal snapshot_ready(payload: PackedByteArray)
@@ -25,9 +28,10 @@ const GAMEPLAY_CAMERA_ZOOM := 1.16
 const HOUSE_CAMERA_ZOOM := 1.12
 const CAMERA_PAN_SPEED_PXPS := 1100.0
 const CAMERA_X_LIMIT_PX := CurlingConstants.TEE_FROM_CENTER_PX + CurlingConstants.HACK_FROM_TEE_PX
+const REMOTE_AIM_STALE_MS := 650
 
 @onready var heat_grid: CurlingHeatGrid = $HeatGrid
-@onready var trajectory: Line2D = $Trajectory
+@onready var aim_guide: CurlingAimGuideScript = $AimGuide
 @onready var game_camera: Camera2D = $Camera2D
 @onready var stones_root: Node2D = $Stones
 
@@ -76,6 +80,12 @@ var _drag_current_screen := Vector2.ZERO
 var _drag_aim_direction := Vector2.RIGHT
 var _drag_power_adjustment := 0.0
 var _current_spin := 0.0
+var _aim_preview_visible := false
+var _aim_preview_from_local := false
+var _aim_preview_direction := Vector2.RIGHT
+var _aim_preview_power := 0.0
+var _aim_preview_spin := 0.0
+var _aim_preview_last_update_ms := 0
 var _sweep_down := false
 var _last_sweep_world := Vector2.ZERO
 var _last_sweep_ms := 0
@@ -98,7 +108,7 @@ func _ready() -> void:
 			stone.stone_collision.connect(_on_stone_collision)
 			_stones.append(stone)
 	_stones.sort_custom(func(a: CurlingStone, b: CurlingStone) -> bool: return a.stone_id < b.stone_id)
-	trajectory.visible = false
+	aim_guide.hide_preview()
 	visible = false
 	set_process(true)
 	set_physics_process(true)
@@ -168,6 +178,12 @@ func _reset_transient_match_state() -> void:
 	_drag_aim_direction = Vector2.RIGHT
 	_drag_power_adjustment = 0.0
 	_current_spin = 0.0
+	_aim_preview_visible = false
+	_aim_preview_from_local = false
+	_aim_preview_direction = Vector2.RIGHT
+	_aim_preview_power = 0.0
+	_aim_preview_spin = 0.0
+	_aim_preview_last_update_ms = 0
 	_sweep_down = false
 	_last_sweep_world = Vector2.ZERO
 	_last_sweep_ms = 0
@@ -180,8 +196,7 @@ func _reset_transient_match_state() -> void:
 	_manual_camera_x = 0.0
 	_camera_left_held = false
 	_camera_right_held = false
-	trajectory.clear_points()
-	trajectory.visible = false
+	aim_guide.hide_preview()
 	heat_grid.clear()
 
 
@@ -202,6 +217,8 @@ func start_demo(ends: int = 1) -> void:
 
 
 func _process(delta: float) -> void:
+	_expire_remote_aim_preview()
+	_send_local_aim_preview_heartbeat()
 	if phase == Phase.IDLE or phase == Phase.RESULT:
 		_process_camera(delta)
 		return
@@ -274,7 +291,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if phase == Phase.AIMING and active_thrower_id == local_player_id:
 			if mouse_event.pressed and mouse_event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 				var wheel_direction := 1.0 if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-				_adjust_spin(wheel_direction * CurlingConstants.SPIN_WHEEL_STEP_RADPS)
+				_adjust_spin(wheel_direction * CurlingConstants.SPIN_WHEEL_STEP_RADPS, true)
 				get_viewport().set_input_as_handled()
 				return
 			elif mouse_event.button_index == MOUSE_BUTTON_LEFT:
@@ -286,6 +303,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					_drag_power_adjustment = 0.0
 					_camera_left_held = false
 					_camera_right_held = false
+					_refresh_local_aim_preview(true)
 					get_viewport().set_input_as_handled()
 				elif not mouse_event.pressed and _dragging:
 					if not mouse_event.position.is_equal_approx(_drag_current_screen):
@@ -450,13 +468,15 @@ func apply_remote_state(state: Dictionary) -> bool:
 	shot_id = int(state.get("shot_id", 0))
 	if shot_id != previous_shot_id or active_thrower_id != previous_thrower_id:
 		_current_spin = 0.0
-		_cancel_drag()
+		_cancel_drag(false)
 		_sweep_down = false
 	if state.has("players"):
 		players = state["players"].duplicate(true)
 	if state.has("lineups"):
 		lineups = state["lineups"].duplicate(true)
 	_apply_remote_stone_ownership()
+	if phase != Phase.AIMING or _local_team() != active_team:
+		_clear_aim_preview(false)
 	team_locked = state.get("team_locked", team_locked).duplicate(true)
 	tactics_confirmed = state.get("tactics_confirmed", tactics_confirmed).duplicate(true)
 	final_result = state.get("final_result", {}).duplicate(true)
@@ -682,7 +702,7 @@ func _begin_tactics() -> void:
 		stone.remove_from_play()
 	heat_grid.clear()
 	_last_sweep_accept_ms_by_player.clear()
-	trajectory.visible = false
+	_clear_aim_preview(false)
 	_bot_delay = 0.7
 	_mark_state_changed()
 
@@ -758,7 +778,7 @@ func _begin_next_throw() -> void:
 	_drag_aim_direction = Vector2(float(direction), 0.0)
 	_drag_power_adjustment = 0.0
 	_active_touched_other = false
-	trajectory.visible = false
+	_clear_aim_preview(false)
 	_bot_delay = 0.9 + _rng.randf_range(0.0, 0.7)
 	_mark_state_changed()
 
@@ -769,7 +789,7 @@ func _launch_active_stone(aim_direction: Vector2, power: float, spin: float) -> 
 	phase = Phase.MOVING
 	phase_time_remaining = 0.0
 	_settle_elapsed = 0.0
-	trajectory.visible = false
+	_clear_aim_preview(false)
 	heat_grid.clear()
 	_last_sweep_accept_ms_by_player.clear()
 	gameplay_event.emit({
@@ -900,32 +920,97 @@ func _can_begin_drag() -> bool:
 	return world_mouse.distance_to(_stones[active_stone_id].global_position) <= 80.0 / maxf(game_camera.zoom.x, 0.1)
 
 
-func _refresh_local_aim_preview() -> void:
+func _refresh_local_aim_preview(force_send: bool = false) -> void:
 	if not _dragging or active_stone_id < 0:
 		return
-	var power := _current_drag_power()
-	show_aim_preview(_drag_aim_direction, power, _current_spin)
-	var now_ms := Time.get_ticks_msec()
-	if now_ms - _last_aim_preview_ms >= roundi(1000.0 / CurlingConstants.AIM_PREVIEW_HZ):
-		_last_aim_preview_ms = now_ms
-		aim_preview_intent.emit(_drag_aim_direction, power, _current_spin)
+	_publish_local_aim_preview(
+		_drag_aim_direction,
+		_current_drag_power(),
+		_current_spin,
+		force_send
+	)
 
 
-func show_aim_preview(aim_direction: Vector2, power: float, spin: float) -> void:
-	if active_stone_id < 0 or aim_direction.length_squared() < 0.9:
-		trajectory.visible = false
+func _publish_local_aim_preview(
+	aim_direction: Vector2,
+	power: float,
+	spin: float,
+	force_send: bool = false
+) -> void:
+	if not show_aim_preview(aim_direction, power, spin, true):
 		return
-	trajectory.points = _predict_path(_stones[active_stone_id].global_position, aim_direction.normalized(), power, spin)
-	trajectory.default_color = CurlingConstants.TEAM_RED_COLOR if active_team == CurlingConstants.TEAM_RED else CurlingConstants.TEAM_BLUE_COLOR
-	trajectory.visible = trajectory.points.size() > 1
+	var now_ms := Time.get_ticks_msec()
+	if force_send or now_ms - _last_aim_preview_ms >= roundi(1000.0 / CurlingConstants.AIM_PREVIEW_HZ):
+		_last_aim_preview_ms = now_ms
+		aim_preview_intent.emit(aim_direction.normalized(), power, spin)
+
+
+func show_aim_preview(aim_direction: Vector2, power: float, spin: float, from_local: bool = false) -> bool:
+	if (
+		phase != Phase.AIMING
+		or active_stone_id < 0
+		or active_stone_id >= _stones.size()
+		or not aim_direction.is_finite()
+		or aim_direction.length_squared() < 0.9
+		or not is_finite(power)
+		or power < 0.0
+		or power > 1.0
+		or not is_finite(spin)
+		or absf(spin) > CurlingConstants.MAX_SPIN_RADPS + 0.001
+		or _local_team() != active_team
+	):
+		_clear_aim_preview()
+		return false
+	_aim_preview_visible = true
+	_aim_preview_from_local = from_local
+	_aim_preview_direction = aim_direction.normalized()
+	_aim_preview_power = power
+	_aim_preview_spin = spin
+	_aim_preview_last_update_ms = Time.get_ticks_msec()
+	var aim_offset := rad_to_deg(
+		Vector2(float(direction), 0.0).angle_to(_aim_preview_direction)
+	)
+	var team_color := (
+		CurlingConstants.TEAM_RED_COLOR
+		if active_team == CurlingConstants.TEAM_RED
+		else CurlingConstants.TEAM_BLUE_COLOR
+	)
+	aim_guide.show_preview(
+		_stones[active_stone_id].global_position,
+		_aim_preview_direction,
+		power,
+		spin,
+		team_color,
+		aim_offset
+	)
+	_emit_hud()
+	return true
+
+
+func hide_aim_preview() -> void:
+	_clear_aim_preview()
+
+
+func has_visible_aim_preview() -> bool:
+	return _aim_preview_visible and aim_guide.preview_active
+
+
+func get_aim_preview_data() -> Dictionary:
+	return {
+		"visible": _aim_preview_visible,
+		"direction": _aim_preview_direction,
+		"power": _aim_preview_power,
+		"spin": _aim_preview_spin,
+		"from_local": _aim_preview_from_local,
+	}
 
 
 func _release_local_throw() -> void:
 	var power := _current_drag_power()
 	var aim_direction := _drag_aim_direction
 	_dragging = false
+	_clear_local_aim_preview()
 	if power <= 0.0 or aim_direction.length_squared() < 0.9:
-		trajectory.visible = false
 		return
 	if authoritative:
 		host_apply_throw(local_player_id, aim_direction, power, _current_spin)
@@ -933,10 +1018,69 @@ func _release_local_throw() -> void:
 		throw_intent.emit(aim_direction, power, _current_spin)
 
 
-func _cancel_drag() -> void:
+func _cancel_drag(notify_team: bool = true) -> void:
+	var had_local_preview := (
+		_aim_preview_visible
+		and _aim_preview_from_local
+		and active_thrower_id == local_player_id
+	)
 	_dragging = false
 	_drag_power_adjustment = 0.0
-	trajectory.visible = false
+	_clear_aim_preview()
+	if notify_team and had_local_preview:
+		aim_preview_clear_intent.emit()
+
+
+func _clear_local_aim_preview() -> void:
+	var should_notify := (
+		_aim_preview_visible
+		and _aim_preview_from_local
+		and active_thrower_id == local_player_id
+	)
+	_clear_aim_preview()
+	if should_notify:
+		aim_preview_clear_intent.emit()
+
+
+func _clear_aim_preview(emit_hud_update: bool = true) -> void:
+	var changed: bool = _aim_preview_visible or aim_guide.preview_active
+	_aim_preview_visible = false
+	_aim_preview_from_local = false
+	_aim_preview_power = 0.0
+	_aim_preview_spin = 0.0
+	_aim_preview_last_update_ms = 0
+	aim_guide.hide_preview()
+	if changed and emit_hud_update:
+		_emit_hud()
+
+
+func _expire_remote_aim_preview() -> void:
+	if (
+		not _aim_preview_visible
+		or _aim_preview_from_local
+		or Time.get_ticks_msec() - _aim_preview_last_update_ms <= REMOTE_AIM_STALE_MS
+	):
+		return
+	_clear_aim_preview()
+
+
+func _send_local_aim_preview_heartbeat() -> void:
+	if (
+		phase != Phase.AIMING
+		or not _aim_preview_visible
+		or not _aim_preview_from_local
+		or active_thrower_id != local_player_id
+	):
+		return
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_aim_preview_ms < roundi(1000.0 / CurlingConstants.AIM_PREVIEW_HZ):
+		return
+	_last_aim_preview_ms = now_ms
+	aim_preview_intent.emit(
+		_aim_preview_direction,
+		_aim_preview_power,
+		_aim_preview_spin
+	)
 
 
 func _current_drag_power() -> float:
@@ -1017,41 +1161,6 @@ func _is_drag_precision_key(event: InputEventKey) -> bool:
 	)
 
 
-func _predict_path(start: Vector2, aim_direction: Vector2, power: float, spin: float) -> PackedVector2Array:
-	var speed_mps := CurlingConstants.throw_speed_for_power(power)
-	var velocity := aim_direction * speed_mps * CurlingConstants.PIXELS_PER_METER
-	var angular_velocity := spin
-	var position := start
-	var points := PackedVector2Array([position])
-	var dt := 1.0 / 30.0
-	for step in range(1200):
-		var speed := velocity.length()
-		if speed <= CurlingConstants.STOP_SPEED_PXPS:
-			break
-		var velocity_direction := velocity / speed
-		var speed_factor := 0.25 + 0.75 * clampf(1.0 - speed / CurlingConstants.PIXELS_PER_METER / CurlingConstants.MAX_THROW_SPEED_MPS, 0.0, 1.0)
-		var acceleration := -velocity_direction * CurlingConstants.BASE_DRAG_PXPS2
-		velocity += acceleration * dt
-		var next_speed := velocity.length()
-		if next_speed > CurlingConstants.STOP_SPEED_PXPS:
-			var turn_radians := (
-				CurlingConstants.CURL_ACCEL_PER_RAD_PXPS2
-				* angular_velocity
-				* speed_factor
-				/ maxf(speed, CurlingConstants.STOP_SPEED_PXPS)
-				* dt
-			)
-			velocity = velocity.normalized().rotated(turn_radians) * next_speed
-		position += velocity * dt
-		angular_velocity *= exp(-CurlingConstants.ANGULAR_DAMP_PER_SEC * dt)
-		if step % 6 == 0:
-			points.append(position)
-		if CurlingRules.is_out_of_play(position, direction):
-			break
-	points.append(position)
-	return points
-
-
 func _submit_sweep_motion(world_position: Vector2) -> void:
 	var now_ms := Time.get_ticks_msec()
 	var delta_sec := clampf(float(now_ms - _last_sweep_ms) / 1000.0, 0.001, 0.25)
@@ -1075,14 +1184,21 @@ func _update_spin_from_keys(delta: float) -> void:
 		_adjust_spin(input_axis * CurlingConstants.SPIN_KEY_RATE_RADPS * delta)
 
 
-func _adjust_spin(delta_spin: float) -> void:
+func _adjust_spin(delta_spin: float, force_send: bool = false) -> void:
 	_current_spin = clampf(
 		_current_spin + delta_spin,
 		-CurlingConstants.MAX_SPIN_RADPS,
 		CurlingConstants.MAX_SPIN_RADPS
 	)
 	if _dragging:
-		_refresh_local_aim_preview()
+		_refresh_local_aim_preview(force_send)
+	elif phase == Phase.AIMING and active_thrower_id == local_player_id:
+		_publish_local_aim_preview(
+			Vector2(float(direction), 0.0),
+			0.0,
+			_current_spin,
+			force_send
+		)
 
 
 func _camera_key_direction(event: InputEventKey) -> int:
@@ -1173,6 +1289,13 @@ func _mark_state_changed() -> void:
 
 
 func _emit_hud() -> void:
+	var can_view_aim := phase == Phase.AIMING and _local_team() == active_team
+	var aim_visible := can_view_aim and _aim_preview_visible
+	var aim_offset := 0.0
+	if aim_visible and _aim_preview_direction.length_squared() >= 0.9:
+		aim_offset = rad_to_deg(
+			Vector2(float(direction), 0.0).angle_to(_aim_preview_direction.normalized())
+		)
 	hud_changed.emit({
 		"phase": phase,
 		"phase_name": get_phase_name(),
@@ -1187,8 +1310,11 @@ func _emit_hud() -> void:
 		"active_team": active_team,
 		"active_player": player_name(active_thrower_id),
 		"active_player_id": active_thrower_id,
-		"spin": _current_spin,
-		"power": _current_drag_power() if _dragging else 0.0,
-		"aim_offset_degrees": _current_aim_offset_degrees(),
+		"can_view_aim": can_view_aim,
+		"aim_visible": aim_visible,
+		"aim_from_teammate": aim_visible and not _aim_preview_from_local,
+		"spin": _aim_preview_spin if aim_visible else 0.0,
+		"power": _aim_preview_power if aim_visible else 0.0,
+		"aim_offset_degrees": aim_offset,
 		"sweeping": _sweep_down and phase == Phase.MOVING,
 	})

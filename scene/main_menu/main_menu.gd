@@ -1,6 +1,7 @@
 extends Control
 
 const CURLING_SCENE := "res://curling/curling.tscn"
+const CURLING_SANDBOX_SCENE := "res://curling/sandbox/curling_sandbox.tscn"
 const TEST_SCENE := "res://scene/test/test.tscn"
 const CurlingSettingsScript := preload("res://curling/settings/curling_settings.gd")
 const CurlingSettingsPanelScript := preload("res://curling/settings/curling_settings_panel.gd")
@@ -14,6 +15,7 @@ const INTRO_BUTTON_STAGGER := 0.055
 @onready var single_player_button: Button = $Content/Menu/SinglePlayerSlot/SinglePlayerButton
 @onready var test_scene_button: Button = $Content/Menu/TestSceneSlot/TestSceneButton
 @onready var curling_button: Button = $Content/Menu/CurlingSlot/CurlingButton
+@onready var curling_sandbox_button: Button = $Content/Menu/CurlingSandboxSlot/CurlingSandboxButton
 @onready var settings_button: Button = $Content/Menu/SettingsSlot/SettingsButton
 @onready var quit_button: Button = $Content/Menu/QuitSlot/QuitButton
 @onready var status_label: Label = $Content/StatusLabel
@@ -33,6 +35,7 @@ func _ready() -> void:
 		single_player_button,
 		test_scene_button,
 		curling_button,
+		curling_sandbox_button,
 		settings_button,
 		quit_button,
 	]
@@ -137,6 +140,12 @@ func _on_curling_pressed() -> void:
 	var error := get_tree().change_scene_to_file(CURLING_SCENE)
 	if error != OK:
 		_set_status("冰壶载入失败：%s" % error_string(error), true)
+
+
+func _on_curling_sandbox_pressed() -> void:
+	var error := get_tree().change_scene_to_file(CURLING_SANDBOX_SCENE)
+	if error != OK:
+		_set_status("冰壶单人测试载入失败：%s" % error_string(error), true)
 
 
 func _on_settings_pressed() -> void:
