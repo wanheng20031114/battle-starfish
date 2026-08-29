@@ -108,6 +108,8 @@ var _leave_ack_deadline_ms := 0
 var _last_shot_clock_warning_shot_id := -1
 var _last_shot_clock_warning_second := -1
 var _tactically_hidden_cursor_id := 0
+var _cursor_viewport_position := Vector2.ZERO
+var _cursor_position_valid := false
 
 
 func _ready() -> void:
@@ -164,6 +166,13 @@ func _process(delta: float) -> void:
 	_update_tactics_ui()
 	_process_disconnect_grace()
 	_update_diagnostics()
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouse:
+		# 光标包按定时器发送；缓存事件坐标可避免多屏桌面坐标再次参与换算。
+		_cursor_viewport_position = (event as InputEventMouse).position
+		_cursor_position_valid = true
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1150,15 +1159,22 @@ func _append_chat(message: Dictionary) -> void:
 
 
 func _send_cursor() -> void:
-	if not net.is_online():
+	if not net.is_online() or not _cursor_position_valid:
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
-	var mouse_screen := get_viewport().get_mouse_position()
 	var in_match := match_controller.visible and match_controller.phase not in [CurlingMatchController.Phase.IDLE, CurlingMatchController.Phase.RESULT]
+	var cursor_position := (
+		match_controller.viewport_to_world(_cursor_viewport_position)
+		if in_match
+		else Vector2(
+			_cursor_viewport_position.x / maxf(viewport_size.x, 1.0),
+			_cursor_viewport_position.y / maxf(viewport_size.y, 1.0)
+		)
+	)
 	var message := {
 		"type": "cursor",
 		"context": "world" if in_match else "ui",
-		"position": match_controller.get_global_mouse_position() if in_match else Vector2(mouse_screen.x / maxf(viewport_size.x, 1.0), mouse_screen.y / maxf(viewport_size.y, 1.0)),
+		"position": cursor_position,
 		"pressed": Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT),
 		"sweeping": in_match and match_controller.phase == CurlingMatchController.Phase.MOVING and match_controller.get_local_team() == match_controller.active_team,
 	}

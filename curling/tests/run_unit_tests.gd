@@ -13,6 +13,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_dimensions_and_calibration()
+	_test_release_metadata()
 	_test_minimap_geometry()
 	_test_player_capacity_and_disconnects()
 	_test_lineup_allocation()
@@ -96,6 +97,24 @@ func _test_dimensions_and_calibration() -> void:
 	_expect_close(float(swept["forward"]) - float(cold["forward"]), 3.0, 0.40, "full heat adds about 3m")
 	var curl_reduction := 1.0 - absf(float(swept["lateral"]) / float(cold["lateral"]))
 	_expect_close(curl_reduction, 0.35, 0.04, "full heat reduces final curl about 35 percent")
+
+
+func _test_release_metadata() -> void:
+	var export_config := FileAccess.get_file_as_string("res://export_presets.cfg")
+	var menu_scene := FileAccess.get_file_as_string("res://scene/main_menu/main_menu.tscn")
+	_expect(
+		str(ProjectSettings.get_setting("application/config/version", "")) == "0.4e",
+		"project exposes release version 0.4e",
+	)
+	_expect(
+		export_config.contains('application/file_version="0.4.4.0"')
+		and export_config.contains('application/product_version="0.4.4.0"'),
+		"Windows resources expose release version 0.4e",
+	)
+	_expect(
+		menu_scene.contains('text = "SHALLOW WATER  //  0.4e"'),
+		"main menu shows release version 0.4e",
+	)
 
 
 func _test_minimap_geometry() -> void:
@@ -346,6 +365,42 @@ func _test_throw_input_precision() -> void:
 	controller.start_match(players, 1, 1, true, 99117)
 	controller.direction = 1
 	controller._force_lock_all_teams()
+	var synthetic_viewport_position := Vector2(900.0, 500.0)
+	var active_stone: CurlingStone = controller._stones[controller.active_stone_id]
+	active_stone.global_position = controller.viewport_to_world(synthetic_viewport_position)
+	_expect(
+		controller._can_begin_drag(synthetic_viewport_position),
+		"event viewport coordinates select the active stone independently of desktop mouse position",
+	)
+	_expect(
+		not controller._can_begin_drag(synthetic_viewport_position + Vector2(200.0, 0.0)),
+		"event viewport coordinates still reject a distant pointer",
+	)
+	var aim_viewport_position := synthetic_viewport_position - Vector2(160.0, 36.0)
+	var expected_mouse_aim := controller.viewport_to_world(aim_viewport_position).direction_to(
+		active_stone.global_position
+	).normalized()
+	controller._update_drag_aim_from_pointer(aim_viewport_position)
+	_expect(
+		controller._drag_aim_direction.distance_to(expected_mouse_aim) <= 0.000001,
+		"mouse aim uses the same viewport-to-world transform as stone selection",
+	)
+	controller.phase = CurlingMatchController.Phase.MOVING
+	controller.active_team = controller._local_team()
+	var sweep_viewport_position := Vector2(740.0, 420.0)
+	var sweep_press := InputEventMouseButton.new()
+	sweep_press.button_index = MOUSE_BUTTON_LEFT
+	sweep_press.pressed = true
+	sweep_press.position = sweep_viewport_position
+	controller._unhandled_input(sweep_press)
+	_expect(
+		controller._last_sweep_world.distance_to(
+			controller.viewport_to_world(sweep_viewport_position)
+		) <= 0.000001,
+		"sweeping starts from the mouse event viewport position",
+	)
+	controller._sweep_down = false
+	controller.phase = CurlingMatchController.Phase.AIMING
 	controller._dragging = true
 	controller._drag_aim_direction = Vector2.RIGHT
 	controller._drag_power_adjustment = 0.0

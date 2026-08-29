@@ -297,7 +297,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 			elif mouse_event.button_index == MOUSE_BUTTON_LEFT:
-				if mouse_event.pressed and _can_begin_drag():
+				if mouse_event.pressed and _can_begin_drag(mouse_event.position):
 					_dragging = true
 					_drag_origin_screen = mouse_event.position
 					_drag_current_screen = mouse_event.position
@@ -310,23 +310,23 @@ func _unhandled_input(event: InputEvent) -> void:
 				elif not mouse_event.pressed and _dragging:
 					if not mouse_event.position.is_equal_approx(_drag_current_screen):
 						_drag_current_screen = mouse_event.position
-						_update_drag_aim_from_pointer()
+						_update_drag_aim_from_pointer(mouse_event.position)
 					_release_local_throw()
 					get_viewport().set_input_as_handled()
 			elif mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 				_cancel_drag()
 		if phase == Phase.MOVING and _local_team() == active_team and mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			_sweep_down = mouse_event.pressed
-			_last_sweep_world = get_global_mouse_position()
+			_last_sweep_world = viewport_to_world(mouse_event.position)
 			_last_sweep_ms = Time.get_ticks_msec()
 	if event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
 		if phase == Phase.AIMING and _dragging:
 			_drag_current_screen = motion.position
-			_update_drag_aim_from_pointer()
+			_update_drag_aim_from_pointer(motion.position)
 			_refresh_local_aim_preview()
 		elif phase == Phase.MOVING and _sweep_down and _local_team() == active_team:
-			_submit_sweep_motion(get_global_mouse_position())
+			_submit_sweep_motion(viewport_to_world(motion.position))
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if _dragging and phase == Phase.AIMING and active_thrower_id == local_player_id and _is_drag_precision_key(key_event):
@@ -949,11 +949,17 @@ func _launch_bot_throw() -> void:
 	_launch_active_stone(aim_direction, power, spin)
 
 
-func _can_begin_drag() -> bool:
+func viewport_to_world(viewport_position: Vector2) -> Vector2:
+	# 输入事件已经位于 Viewport 坐标系，不再经过桌面原点与窗口位置换算。
+	return get_canvas_transform().affine_inverse() * viewport_position
+
+
+func _can_begin_drag(viewport_position: Vector2) -> bool:
 	if active_stone_id < 0:
 		return false
-	var world_mouse := get_global_mouse_position()
-	return world_mouse.distance_to(_stones[active_stone_id].global_position) <= 80.0 / maxf(game_camera.zoom.x, 0.1)
+	return viewport_to_world(viewport_position).distance_to(
+		_stones[active_stone_id].global_position
+	) <= 80.0 / maxf(game_camera.zoom.x, 0.1)
 
 
 func _refresh_local_aim_preview(force_send: bool = false) -> void:
@@ -1131,11 +1137,11 @@ func _raw_drag_power() -> float:
 	return clampf((drag_distance - 8.0) / maxf(1.0, max_drag - 8.0), 0.0, 1.0)
 
 
-func _update_drag_aim_from_pointer() -> void:
+func _update_drag_aim_from_pointer(viewport_position: Vector2) -> void:
 	if active_stone_id < 0:
 		return
 	var active_position := _stones[active_stone_id].global_position
-	var pointer_direction := get_global_mouse_position().direction_to(active_position)
+	var pointer_direction := viewport_to_world(viewport_position).direction_to(active_position)
 	if pointer_direction.length_squared() >= 0.9:
 		_drag_aim_direction = pointer_direction.normalized()
 
