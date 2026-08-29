@@ -23,7 +23,6 @@ SOURCE_PATHS = (
 RUNTIME_REFERENCES = {
     Path("assets/ui_pixel/production/large_sandstone_frame.png"): (
         Path("scene/main_menu/main_menu_settings_panel.tscn"),
-        Path("curling/curling.tscn"),
     ),
     Path("assets/ui_pixel/production/icons/settings_40/fullscreen.png"): (
         Path("scene/main_menu/main_menu_settings_panel.tscn"),

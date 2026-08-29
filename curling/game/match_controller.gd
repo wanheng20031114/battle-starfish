@@ -202,22 +202,6 @@ func _reset_transient_match_state() -> void:
 	heat_grid.clear()
 
 
-func start_demo(ends: int = 1) -> void:
-	var demo_players: Array[Dictionary] = []
-	var names := ["你", "阿霜", "小岚", "北辰", "夏沫", "海盐", "青禾", "白露"]
-	for index in range(CurlingConstants.MAX_PLAYERS):
-		demo_players.append({
-			"id": index + 1,
-			"nickname": names[index],
-			"team": CurlingConstants.TEAM_RED if index % 2 == 0 else CurlingConstants.TEAM_BLUE,
-			"join_order": index,
-			"connected": true,
-			"bot": index > 0,
-			"color": CurlingConstants.PLAYER_COLORS[index],
-		})
-	start_match(demo_players, ends, 1, true, int(Time.get_unix_time_from_system()))
-
-
 func _process(delta: float) -> void:
 	_expire_remote_aim_preview()
 	_send_local_aim_preview_heartbeat()
@@ -386,15 +370,23 @@ func set_tactics_confirmed(player_id: int, confirmed: bool) -> bool:
 	tactics_confirmed[player_id] = confirmed
 	if _all_connected_team_members_confirmed(team):
 		_lock_team(team)
-	_mark_state_changed()
+	if phase == Phase.TACTICS:
+		_mark_state_changed()
 	return true
 
 
-func host_apply_throw(player_id: int, aim_direction: Vector2, power: float, spin: float) -> bool:
+func host_apply_throw(
+	player_id: int,
+	aim_direction: Vector2,
+	power: float,
+	spin: float,
+	expected_shot_id: int = -1,
+) -> bool:
 	if (
 		not authoritative
 		or phase != Phase.AIMING
 		or player_id != active_thrower_id
+		or (expected_shot_id >= 0 and expected_shot_id != shot_id)
 		or not aim_direction.is_finite()
 		or aim_direction.length_squared() < 0.9
 		or not is_finite(power)
@@ -413,12 +405,14 @@ func host_apply_sweep(
 	from_world: Vector2,
 	to_world: Vector2,
 	delta_sec: float,
-	sample_host_ms: int
+	sample_host_ms: int,
+	expected_shot_id: int = -1,
 ) -> bool:
 	if (
 		not authoritative
 		or phase != Phase.MOVING
 		or not players.has(player_id)
+		or (expected_shot_id >= 0 and expected_shot_id != shot_id)
 		or not from_world.is_finite()
 		or not to_world.is_finite()
 		or delta_sec <= 0.0
@@ -473,6 +467,7 @@ func apply_remote_state(state: Dictionary) -> bool:
 		_current_spin = 0.0
 		_cancel_drag(false)
 		_sweep_down = false
+		heat_grid.clear()
 	if state.has("players"):
 		players = state["players"].duplicate(true)
 	if state.has("lineups"):
@@ -553,9 +548,13 @@ func apply_remote_snapshot(payload: PackedByteArray) -> bool:
 	if not bool(decoded.get("valid", false)):
 		return false
 	var incoming_sequence := int(decoded.get("state_sequence", -1))
-	if incoming_sequence < _last_remote_state_sequence:
-		return false
 	var incoming_shot := int(decoded.get("shot_id", -1))
+	if (
+		incoming_sequence != state_sequence
+		or incoming_sequence < _last_remote_state_sequence
+		or incoming_shot != shot_id
+	):
+		return false
 	var force_snap := incoming_sequence != _last_remote_state_sequence or incoming_shot != _last_remote_shot_id
 	_last_remote_state_sequence = incoming_sequence
 	_last_remote_shot_id = incoming_shot
@@ -760,7 +759,8 @@ func _confirm_demo_bots() -> void:
 	for team in [CurlingConstants.TEAM_RED, CurlingConstants.TEAM_BLUE]:
 		if _all_connected_team_members_confirmed(team):
 			_lock_team(team)
-	_mark_state_changed()
+	if phase == Phase.TACTICS:
+		_mark_state_changed()
 
 
 func _force_lock_all_teams() -> void:

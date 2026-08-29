@@ -94,7 +94,7 @@ theme_override_constants/separation = 10
 layout_mode = 2
 theme_override_colors/font_color = Color(0.06, 0.25, 0.32, 0.92)
 theme_override_font_sizes/font_size = 14
-text = "SHALLOW WATER  //  0.4e"
+text = "SHALLOW WATER  //  0.4f"
 
 [node name="Title" type="Label" parent="Content" unique_id=763283746]
 layout_mode = 2

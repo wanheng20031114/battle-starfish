@@ -71,6 +71,7 @@ const CurlingManualPanelScript := preload("res://curling/manual/curling_manual_p
 
 @onready var result_title: Label = $UI/ResultScreen/Panel/Layout/Title
 @onready var result_score: Label = $UI/ResultScreen/Panel/Layout/Score
+@onready var result_back_to_room: Button = $UI/ResultScreen/Panel/Layout/BackToRoom
 @onready var cursor_root: Control = $UI/CursorLayer
 
 var _log := CurlingLog.new()
@@ -160,6 +161,7 @@ func _process(delta: float) -> void:
 		if not sparse.is_empty():
 			_send_packet(CurlingConstants.CH_SWEEP, 0, {
 				"type": "heat_sparse",
+				"shot_id": match_controller.shot_id,
 				"payload": sparse,
 				"time_ms": Time.get_ticks_msec(),
 			})
@@ -256,13 +258,26 @@ func _connect_runtime() -> void:
 	match_controller.state_changed.connect(_on_match_state_changed)
 	match_controller.hud_changed.connect(_on_match_hud_changed)
 	match_controller.throw_intent.connect(func(direction: Vector2, power: float, spin: float) -> void:
-		_send_to_host(CurlingConstants.CH_GAMEPLAY, {"type": "throw", "direction": direction, "power": power, "spin": spin})
+		_send_to_host(CurlingConstants.CH_GAMEPLAY, {
+			"type": "throw",
+			"shot_id": match_controller.shot_id,
+			"direction": direction,
+			"power": power,
+			"spin": spin,
+		})
 	)
 	match_controller.aim_preview_intent.connect(_on_local_aim_preview)
 	match_controller.aim_preview_clear_intent.connect(_on_local_aim_preview_cleared)
 	match_controller.sweep_intent.connect(func(from_world: Vector2, to_world: Vector2, delta_sec: float, host_ms: int) -> void:
 		var estimated_host_ms := _network_clock.estimated_host_time_ms() if net.is_online() and not net.is_host() else host_ms
-		_send_to_host(CurlingConstants.CH_SWEEP, {"type": "sweep", "from": from_world, "to": to_world, "delta": delta_sec, "host_ms": estimated_host_ms})
+		_send_to_host(CurlingConstants.CH_SWEEP, {
+			"type": "sweep",
+			"shot_id": match_controller.shot_id,
+			"from": from_world,
+			"to": to_world,
+			"delta": delta_sec,
+			"host_ms": estimated_host_ms,
+		})
 	)
 	match_controller.snapshot_ready.connect(func(payload: PackedByteArray) -> void:
 		if net.is_online() and net.is_host(): net.send_packet(CurlingConstants.CH_STONE_SNAPSHOT, 0, payload)
@@ -474,7 +489,15 @@ func _on_net_packet(channel: int, sender_peer_id: int, payload: PackedByteArray)
 				call_deferred("_finish_pending_room_exit")
 		return
 	if channel == CurlingConstants.CH_STONE_SNAPSHOT:
-		if not net.is_host() and sender_peer_id == net.host_peer_id:
+		if (
+			not net.is_host()
+			and sender_peer_id == net.host_peer_id
+			and _room_started
+			and match_controller.phase not in [
+				CurlingMatchController.Phase.IDLE,
+				CurlingMatchController.Phase.RESULT,
+			]
+		):
 			match_controller.apply_remote_snapshot(payload)
 		return
 	var message := CurlingNet.decode_message(payload, 65536 if channel == CurlingConstants.CH_SYSTEM else 16384)
@@ -515,17 +538,30 @@ func _handle_gameplay_message(sender: int, message: Dictionary) -> void:
 	if net.is_host():
 		match type:
 			"lineup_toggle":
-				if match_controller.toggle_lineup_slot(sender, int(message.get("slot", -1))): _broadcast_match_state()
+				match_controller.toggle_lineup_slot(sender, int(message.get("slot", -1)))
 			"tactics_confirm":
-				if match_controller.set_tactics_confirmed(sender, bool(message.get("confirmed", true))): _broadcast_match_state()
+				match_controller.set_tactics_confirmed(sender, bool(message.get("confirmed", true)))
 			"throw":
-				match_controller.host_apply_throw(sender, message.get("direction", Vector2.ZERO), float(message.get("power", 0.0)), float(message.get("spin", 0.0)))
+				match_controller.host_apply_throw(
+					sender,
+					message.get("direction", Vector2.ZERO),
+					float(message.get("power", 0.0)),
+					float(message.get("spin", 0.0)),
+					int(message.get("shot_id", -1)),
+				)
 	else:
 		if sender != net.host_peer_id:
 			return
 		if type == "match_start":
 			_room_started = true
-			match_controller.start_match(message.get("players", []), int(message.get("ends", 1)), net.local_peer_id, false, int(message.get("seed", 1)))
+			if should_initialize_remote_match(match_controller.authoritative, match_controller.phase):
+				match_controller.start_match(
+					message.get("players", []),
+					int(message.get("ends", 1)),
+					net.local_peer_id,
+					false,
+					int(message.get("seed", 1)),
+				)
 			_show_screen("match")
 		elif type == "authoritative_event":
 			_on_gameplay_event(message.get("event", {}))
@@ -593,11 +629,32 @@ func _handle_aim_message(sender: int, message: Dictionary) -> void:
 func _handle_sweep_message(sender: int, message: Dictionary) -> void:
 	var type := str(message.get("type", ""))
 	if net.is_host() and type == "sweep":
-		match_controller.host_apply_sweep(sender, message.get("from", Vector2.ZERO), message.get("to", Vector2.ZERO), float(message.get("delta", 0.0)), int(message.get("host_ms", Time.get_ticks_msec())))
-	elif not net.is_host() and sender == net.host_peer_id and type == "heat_segment":
+		match_controller.host_apply_sweep(
+			sender,
+			message.get("from", Vector2.ZERO),
+			message.get("to", Vector2.ZERO),
+			float(message.get("delta", 0.0)),
+			int(message.get("host_ms", Time.get_ticks_msec())),
+			int(message.get("shot_id", -1)),
+		)
+	elif (
+		not net.is_host()
+		and sender == net.host_peer_id
+		and type == "heat_segment"
+		and packet_matches_current_shot(message, match_controller.shot_id)
+	):
 		match_controller.heat_grid.apply_authoritative_segment(message.get("from", Vector2.ZERO), message.get("to", Vector2.ZERO), float(message.get("speed", 0.0)), _network_clock.host_to_local_time_ms(int(message.get("time_ms", Time.get_ticks_msec()))))
-	elif not net.is_host() and sender == net.host_peer_id and type == "heat_sparse":
+	elif (
+		not net.is_host()
+		and sender == net.host_peer_id
+		and type == "heat_sparse"
+		and packet_matches_current_shot(message, match_controller.shot_id)
+	):
 		match_controller.heat_grid.import_sparse(message.get("payload", PackedByteArray()), _network_clock.host_to_local_time_ms(int(message.get("time_ms", Time.get_ticks_msec()))))
+
+
+static func packet_matches_current_shot(message: Dictionary, current_shot_id: int) -> bool:
+	return not message.has("shot_id") or int(message.get("shot_id", -1)) == current_shot_id
 
 
 func _handle_cursor_message(sender: int, message: Dictionary) -> void:
@@ -629,10 +686,23 @@ func _handle_cursor_message(sender: int, message: Dictionary) -> void:
 
 
 func _handle_chat_message(sender: int, message: Dictionary) -> void:
-	if net.is_host() and str(message.get("type", "")) == "chat_request":
-		_host_accept_chat(sender, str(message.get("text", "")), bool(message.get("team_only", true)))
-	elif str(message.get("type", "")) == "chat":
-		_append_chat(message)
+	if net.is_host():
+		if str(message.get("type", "")) == "chat_request":
+			_host_accept_chat(
+				sender,
+				str(message.get("text", "")),
+				bool(message.get("team_only", true)),
+			)
+		return
+	if sender != net.host_peer_id or str(message.get("type", "")) != "chat":
+		return
+	var canonical := validate_chat_message_for_recipient(
+		message,
+		_room_players,
+		net.local_peer_id,
+	)
+	if not canonical.is_empty():
+		_append_chat(canonical)
 
 
 func _host_register_player(sender: int, message: Dictionary) -> void:
@@ -883,7 +953,14 @@ static func team_aim_recipient_ids(
 
 func _on_authoritative_heat_segment(from_world: Vector2, to_world: Vector2, speed_mps: float, sample_ms: int) -> void:
 	if net.is_online() and net.is_host():
-		_send_packet(CurlingConstants.CH_SWEEP, 0, {"type": "heat_segment", "from": from_world, "to": to_world, "speed": speed_mps, "time_ms": sample_ms})
+		_send_packet(CurlingConstants.CH_SWEEP, 0, {
+			"type": "heat_segment",
+			"shot_id": match_controller.shot_id,
+			"from": from_world,
+			"to": to_world,
+			"speed": speed_mps,
+			"time_ms": sample_ms,
+		})
 
 
 func _on_match_state_changed() -> void:
@@ -896,7 +973,10 @@ func _broadcast_match_state() -> void:
 		var peer_id := int(peer_id_variant)
 		if peer_id == net.local_peer_id:
 			continue
-		var team := int((_room_players[peer_id] as Dictionary).get("team", CurlingConstants.TEAM_NONE))
+		var player := _room_players[peer_id] as Dictionary
+		if not bool(player.get("connected", true)):
+			continue
+		var team := int(player.get("team", CurlingConstants.TEAM_NONE))
 		_send_packet(CurlingConstants.CH_SYSTEM, peer_id, {"type": "match_state", "state": match_controller.export_state_for(team)})
 
 
@@ -1056,10 +1136,15 @@ func _on_match_finished(result: Dictionary) -> void:
 	result_score.text = "红队 %d  —  %d 蓝队" % [int(result.get("red_score", 0)), int(result.get("blue_score", 0))]
 	if bool(result.get("forfeit", false)):
 		result_score.text += "\n%s" % str(result.get("reason", "队伍判负"))
+	var local_can_return := can_return_to_room(net.is_online(), net.is_host())
+	result_back_to_room.disabled = not local_can_return
+	result_back_to_room.text = "返回原房间" if local_can_return else "等待房主返回房间"
 	_show_screen("result")
 
 
 func _return_to_room_after_match() -> void:
+	if not can_return_to_room(net.is_online(), net.is_host()):
+		return
 	_room_started = false
 	for player_id_variant in _room_players.keys():
 		var player: Dictionary = _room_players[player_id_variant]
@@ -1068,6 +1153,10 @@ func _return_to_room_after_match() -> void:
 	_show_room()
 	if net.is_online() and net.is_host():
 		_broadcast_room_state()
+
+
+static func can_return_to_room(is_online: bool, is_host: bool) -> bool:
+	return not is_online or is_host
 
 
 func _leave_room() -> void:
@@ -1119,8 +1208,8 @@ func _finish_pending_room_exit() -> void:
 
 func _on_chat_submitted(text: String) -> void:
 	chat_input.clear()
-	var cleaned := text.strip_edges()
-	if cleaned.is_empty() or cleaned.length() > 200:
+	var cleaned := sanitize_chat_text(text)
+	if cleaned.is_empty():
 		return
 	if net.is_online():
 		if net.is_host():
@@ -1128,25 +1217,46 @@ func _on_chat_submitted(text: String) -> void:
 		else:
 			_send_to_host(CurlingConstants.CH_CHAT, {"type": "chat_request", "text": cleaned, "team_only": chat_channel.selected == 0})
 	else:
-		_append_chat({"type": "chat", "sender": 1, "nickname": _nickname(), "text": cleaned, "team_only": chat_channel.selected == 0})
+		var local_player: Dictionary = _room_players.get(1, {})
+		_append_chat({
+			"type": "chat",
+			"sender": 1,
+			"nickname": _nickname(),
+			"text": cleaned,
+			"team_only": chat_channel.selected == 0,
+			"team": int(local_player.get("team", CurlingConstants.TEAM_NONE)),
+		})
 
 
 func _host_accept_chat(sender: int, text: String, team_only: bool) -> void:
+	var cleaned := sanitize_chat_text(text)
+	if cleaned.is_empty() or not _room_players.has(sender):
+		return
+	var sender_player_variant: Variant = _room_players[sender]
+	if typeof(sender_player_variant) != TYPE_DICTIONARY:
+		return
+	var sender_player := sender_player_variant as Dictionary
+	if not bool(sender_player.get("connected", true)):
+		return
 	var now_ms := Time.get_ticks_msec()
 	var sender_times: Array = _chat_sent_ms.get(sender, [])
 	sender_times = sender_times.filter(func(value: int) -> bool: return now_ms - value < 2000)
-	if sender_times.size() >= 4 or text.length() > 200 or not _room_players.has(sender):
+	if sender_times.size() >= 4:
 		return
 	sender_times.append(now_ms)
 	_chat_sent_ms[sender] = sender_times
-	var sender_player: Dictionary = _room_players[sender]
-	var message := {"type": "chat", "sender": sender, "nickname": sender_player.get("nickname", "玩家"), "text": text, "team_only": team_only, "team": sender_player.get("team", 0)}
-	_append_chat(message)
-	for peer_id_variant in _room_players.keys():
-		var peer_id := int(peer_id_variant)
+	var message := {
+		"type": "chat",
+		"sender": sender,
+		"nickname": str(sender_player.get("nickname", "玩家")),
+		"text": cleaned,
+		"team_only": team_only,
+		"team": int(sender_player.get("team", CurlingConstants.TEAM_NONE)),
+	}
+	for peer_id in chat_recipient_ids(_room_players, sender, team_only):
 		if peer_id == net.local_peer_id:
-			continue
-		if not team_only or int((_room_players[peer_id] as Dictionary).get("team", 0)) == int(sender_player.get("team", 0)):
+			_append_chat(message)
+		else:
 			_send_packet(CurlingConstants.CH_CHAT, peer_id, message)
 
 
@@ -1154,8 +1264,96 @@ func _append_chat(message: Dictionary) -> void:
 	_chat_messages.append(message.duplicate(true))
 	if _chat_messages.size() > 100:
 		_chat_messages.pop_front()
-	chat_history.append_text("[%s] %s\n" % [str(message.get("nickname", "玩家")), str(message.get("text", ""))])
+	chat_history.append_text("%s\n" % format_chat_line(message))
 	chat_history.scroll_to_line(maxi(0, chat_history.get_line_count() - 1))
+
+
+static func sanitize_chat_text(text: String) -> String:
+	if text.length() > 200:
+		return ""
+	var sanitized := ""
+	var previous_was_space := false
+	for index in range(text.length()):
+		var codepoint := text.unicode_at(index)
+		var is_control := codepoint < 32 or codepoint == 127
+		var character := " " if is_control else text.substr(index, 1)
+		if character == " ":
+			if not previous_was_space:
+				sanitized += character
+			previous_was_space = true
+		else:
+			sanitized += character
+			previous_was_space = false
+	return sanitized.strip_edges()
+
+
+static func chat_recipient_ids(
+	room_players: Dictionary,
+	sender_id: int,
+	team_only: bool,
+) -> Array[int]:
+	var recipients: Array[int] = []
+	var sender_variant: Variant = room_players.get(sender_id)
+	if typeof(sender_variant) != TYPE_DICTIONARY:
+		return recipients
+	var sender := sender_variant as Dictionary
+	if not bool(sender.get("connected", true)):
+		return recipients
+	var sender_team := int(sender.get("team", CurlingConstants.TEAM_NONE))
+	for player_id_variant in room_players.keys():
+		var player_variant: Variant = room_players[player_id_variant]
+		if typeof(player_variant) != TYPE_DICTIONARY:
+			continue
+		var player := player_variant as Dictionary
+		if not bool(player.get("connected", true)):
+			continue
+		if team_only and int(player.get("team", CurlingConstants.TEAM_NONE)) != sender_team:
+			continue
+		recipients.append(int(player_id_variant))
+	recipients.sort()
+	return recipients
+
+
+static func validate_chat_message_for_recipient(
+	message: Dictionary,
+	room_players: Dictionary,
+	local_player_id: int,
+) -> Dictionary:
+	if str(message.get("type", "")) != "chat":
+		return {}
+	var sender_id := int(message.get("sender", 0))
+	var sender_variant: Variant = room_players.get(sender_id)
+	var local_variant: Variant = room_players.get(local_player_id)
+	if typeof(sender_variant) != TYPE_DICTIONARY or typeof(local_variant) != TYPE_DICTIONARY:
+		return {}
+	var sender := sender_variant as Dictionary
+	var local_player := local_variant as Dictionary
+	if not bool(sender.get("connected", true)) or not bool(local_player.get("connected", true)):
+		return {}
+	var sender_team := int(sender.get("team", CurlingConstants.TEAM_NONE))
+	var team_only := bool(message.get("team_only", true))
+	if team_only and int(local_player.get("team", CurlingConstants.TEAM_NONE)) != sender_team:
+		return {}
+	var cleaned := sanitize_chat_text(str(message.get("text", "")))
+	if cleaned.is_empty():
+		return {}
+	return {
+		"type": "chat",
+		"sender": sender_id,
+		"nickname": str(sender.get("nickname", "玩家")),
+		"text": cleaned,
+		"team_only": team_only,
+		"team": sender_team,
+	}
+
+
+static func format_chat_line(message: Dictionary) -> String:
+	var scope := "队伍" if bool(message.get("team_only", true)) else "全局"
+	return "[%s] [%s] %s" % [
+		scope,
+		str(message.get("nickname", "玩家")),
+		str(message.get("text", "")),
+	]
 
 
 func _send_cursor() -> void:
@@ -1356,11 +1554,18 @@ func _apply_room_state(message: Dictionary) -> void:
 	_sync_remote_cursor_identities()
 	_room_started = bool(message.get("started", false))
 	if _room_started:
-		if match_controller.authoritative or match_controller.phase in [CurlingMatchController.Phase.IDLE, CurlingMatchController.Phase.RESULT]:
+		if should_initialize_remote_match(match_controller.authoritative, match_controller.phase):
 			match_controller.start_match(_room_player_list(), _room_ends, net.local_peer_id, false, 0)
 		_show_screen("match")
 	else:
 		_show_room()
+
+
+static func should_initialize_remote_match(authoritative: bool, phase: int) -> bool:
+	return authoritative or phase in [
+		CurlingMatchController.Phase.IDLE,
+		CurlingMatchController.Phase.RESULT,
+	]
 
 
 func _show_room() -> void:
