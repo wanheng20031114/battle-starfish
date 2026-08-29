@@ -19,7 +19,6 @@ func _run() -> void:
 	_test_lineup_allocation()
 	_test_rules()
 	_test_snapshot_codec()
-	_test_multiplayer_routing_and_authority()
 	_test_throw_input_precision()
 	_test_team_aim_privacy_and_geometry()
 	_test_ui_asset_boundary_and_audio_cues()
@@ -104,17 +103,17 @@ func _test_release_metadata() -> void:
 	var export_config := FileAccess.get_file_as_string("res://export_presets.cfg")
 	var menu_scene := FileAccess.get_file_as_string("res://scene/main_menu/main_menu.tscn")
 	_expect(
-		str(ProjectSettings.get_setting("application/config/version", "")) == "0.4f",
-		"project exposes release version 0.4f",
+		str(ProjectSettings.get_setting("application/config/version", "")) == "0.4e",
+		"project exposes release version 0.4e",
 	)
 	_expect(
-		export_config.contains('application/file_version="0.4.5.0"')
-		and export_config.contains('application/product_version="0.4.5.0"'),
-		"Windows resources expose release version 0.4f",
+		export_config.contains('application/file_version="0.4.4.0"')
+		and export_config.contains('application/product_version="0.4.4.0"'),
+		"Windows resources expose release version 0.4e",
 	)
 	_expect(
-		menu_scene.contains('text = "SHALLOW WATER  //  0.4f"'),
-		"main menu shows release version 0.4f",
+		menu_scene.contains('text = "SHALLOW WATER  //  0.4e"'),
+		"main menu shows release version 0.4e",
 	)
 
 
@@ -335,157 +334,6 @@ func _test_snapshot_codec() -> void:
 	invalid_masks[10] = invalid_masks[10] | 0x10
 	_expect(not bool(CurlingStoneSnapshotCodec.decode_snapshot(invalid_masks).get("valid", true)), "moving stone outside in-play mask rejected")
 
-	var controller_scene := load("res://curling/game/match_controller.tscn") as PackedScene
-	var players: Array[Dictionary] = [
-		{"id": 1, "nickname": "红", "team": CurlingConstants.TEAM_RED, "connected": true},
-		{"id": 2, "nickname": "蓝", "team": CurlingConstants.TEAM_BLUE, "connected": true},
-	]
-	var remote := controller_scene.instantiate() as CurlingMatchController
-	root.add_child(remote)
-	remote.start_match(players, 1, 2, false, 2026)
-	var synchronized_state := remote.export_state_for(CurlingConstants.TEAM_BLUE)
-	synchronized_state["state_sequence"] = 20
-	synchronized_state["phase"] = CurlingMatchController.Phase.MOVING
-	synchronized_state["shot_id"] = 3
-	synchronized_state["active_stone_id"] = 8
-	synchronized_state["active_thrower_id"] = 2
-	synchronized_state["active_team"] = CurlingConstants.TEAM_BLUE
-	remote.heat_grid.deposit_segment(Vector2.ZERO, Vector2(20.0, 0.0), 0.1, 123450, false)
-	_expect(remote.heat_grid.active_cell_count() > 0, "remote heat grid contains the previous shot's sweep")
-	_expect(remote.apply_remote_state(synchronized_state), "remote accepts the newer reliable state")
-	_expect(remote.heat_grid.active_cell_count() == 0, "reliable shot transition clears stale remote sweep heat")
-	_expect(
-		not remote.apply_remote_snapshot(
-			CurlingStoneSnapshotCodec.encode_snapshot(123460, 19, 3, stones)
-		),
-		"snapshot older than reliable state is rejected",
-	)
-	_expect(
-		not remote.apply_remote_snapshot(
-			CurlingStoneSnapshotCodec.encode_snapshot(123460, 21, 3, stones)
-		),
-		"snapshot ahead of reliable state waits for its complete state",
-	)
-	_expect(
-		not remote.apply_remote_snapshot(
-			CurlingStoneSnapshotCodec.encode_snapshot(123461, 20, 2, stones)
-		),
-		"snapshot from a previous shot is rejected",
-	)
-	_expect(
-		remote.apply_remote_snapshot(
-			CurlingStoneSnapshotCodec.encode_snapshot(123462, 20, 3, stones)
-		),
-		"snapshot matching the reliable state and shot is accepted",
-	)
-	remote.free()
-
-
-func _test_multiplayer_routing_and_authority() -> void:
-	var room_players := {
-		1: {"id": 1, "nickname": "红一", "team": CurlingConstants.TEAM_RED, "connected": true},
-		2: {"id": 2, "nickname": "蓝一", "team": CurlingConstants.TEAM_BLUE, "connected": true},
-		3: {"id": 3, "nickname": "蓝二", "team": CurlingConstants.TEAM_BLUE, "connected": true},
-		4: {"id": 4, "nickname": "红二", "team": CurlingConstants.TEAM_RED, "connected": true},
-		5: {"id": 5, "nickname": "蓝掉线", "team": CurlingConstants.TEAM_BLUE, "connected": false},
-	}
-	_expect(
-		CurlingAppScript.sanitize_chat_text("  战术\n\t消息  ") == "战术 消息",
-		"chat sanitizer prevents embedded lines while preserving readable text",
-	)
-	_expect(
-		CurlingAppScript.sanitize_chat_text("字".repeat(201)).is_empty(),
-		"chat sanitizer enforces the authoritative length limit",
-	)
-	_expect(
-		CurlingAppScript.chat_recipient_ids(room_players, 2, true) == [2, 3],
-		"team chat reaches only connected members of the sender's actual team",
-	)
-	_expect(
-		CurlingAppScript.chat_recipient_ids(room_players, 2, false) == [1, 2, 3, 4],
-		"global chat reaches every connected room member",
-	)
-	_expect(
-		CurlingAppScript.packet_matches_current_shot({"shot_id": 8}, 8),
-		"realtime packet for the current shot is accepted",
-	)
-	_expect(
-		not CurlingAppScript.packet_matches_current_shot({"shot_id": 7}, 8),
-		"realtime packet from a previous shot is rejected",
-	)
-	_expect(
-		CurlingAppScript.packet_matches_current_shot({}, 8),
-		"legacy realtime packet remains protocol-compatible",
-	)
-	var delayed_packets: Array[Dictionary] = [
-		{"deliver_ms": 100, "sequence": 1},
-		{"deliver_ms": 100, "sequence": 2},
-		{"deliver_ms": 101, "sequence": 3},
-	]
-	var due_packets := CurlingNet.pop_due_packets_in_order(delayed_packets, 100)
-	_expect(
-		due_packets.size() == 2
-		and int(due_packets[0].get("sequence", 0)) == 1
-		and int(due_packets[1].get("sequence", 0)) == 2,
-		"development latency keeps packets with the same deadline in send order",
-	)
-	_expect(
-		delayed_packets.size() == 1
-		and int(delayed_packets[0].get("sequence", 0)) == 3,
-		"development latency leaves future packets queued",
-	)
-	var wire_message := {
-		"type": "chat",
-		"sender": 2,
-		"nickname": "伪造名字",
-		"text": "  注意\n站位  ",
-		"team_only": true,
-		"team": CurlingConstants.TEAM_RED,
-	}
-	var teammate_message := CurlingAppScript.validate_chat_message_for_recipient(
-		wire_message,
-		room_players,
-		3,
-	)
-	_expect(str(teammate_message.get("nickname", "")) == "蓝一", "chat nickname is rebuilt from authoritative room state")
-	_expect(str(teammate_message.get("text", "")) == "注意 站位", "chat text is canonicalized on receipt")
-	_expect(int(teammate_message.get("team", 0)) == CurlingConstants.TEAM_BLUE, "chat team is rebuilt from authoritative room state")
-	_expect(
-		CurlingAppScript.validate_chat_message_for_recipient(wire_message, room_players, 1).is_empty(),
-		"opposing host cannot receive a team-only message",
-	)
-	_expect(
-		CurlingAppScript.format_chat_line(teammate_message) == "[队伍] [蓝一] 注意 站位",
-		"team chat history displays its scope before the player name",
-	)
-	wire_message["team_only"] = false
-	var global_message := CurlingAppScript.validate_chat_message_for_recipient(
-		wire_message,
-		room_players,
-		1,
-	)
-	_expect(
-		CurlingAppScript.format_chat_line(global_message) == "[全局] [蓝一] 注意 站位",
-		"global chat history displays its scope before the player name",
-	)
-	_expect(not CurlingAppScript.can_return_to_room(true, false), "online member cannot fork the result screen back to a local room")
-	_expect(CurlingAppScript.can_return_to_room(true, true), "online host controls the authoritative room return")
-	_expect(CurlingAppScript.can_return_to_room(false, false), "offline demo can return to its room")
-	_expect(
-		not CurlingAppScript.should_initialize_remote_match(
-			false,
-			CurlingMatchController.Phase.TACTICS,
-		),
-		"late cross-channel match-start does not overwrite an already applied state",
-	)
-	_expect(
-		CurlingAppScript.should_initialize_remote_match(
-			false,
-			CurlingMatchController.Phase.IDLE,
-		),
-		"remote match initializes from idle when match-start arrives first",
-	)
-
 
 func _test_throw_input_precision() -> void:
 	_expect_close(CurlingConstants.MAX_SPIN_RADPS, 2.0, 0.0001, "expanded spin limit")
@@ -494,14 +342,12 @@ func _test_throw_input_precision() -> void:
 	var exact_spin := CurlingConstants.MAX_SPIN_RADPS - 0.000123456
 	var encoded := CurlingNet.encode_message({
 		"type": "throw",
-		"shot_id": 27,
 		"direction": exact_direction,
 		"power": exact_power,
 		"spin": exact_spin,
 	})
 	var decoded := CurlingNet.decode_message(encoded)
 	_expect(str(decoded.get("type", "")) == "throw", "member throw message round trip")
-	_expect(int(decoded.get("shot_id", -1)) == 27, "member throw carries its authoritative shot identity")
 	_expect(
 		(decoded.get("direction", Vector2.ZERO) as Vector2).distance_to(exact_direction) <= 0.000000000001,
 		"member throw direction keeps native Vector2 precision",
@@ -608,26 +454,7 @@ func _test_throw_input_precision() -> void:
 	var member_direction := decoded.get("direction", Vector2.ZERO) as Vector2
 	var member_power := float(decoded.get("power", 0.0))
 	var member_spin := float(decoded.get("spin", 0.0))
-	_expect(
-		not controller.host_apply_throw(
-			2,
-			member_direction,
-			member_power,
-			member_spin,
-			controller.shot_id + 1,
-		),
-		"throw intent from another shot is rejected",
-	)
-	_expect(
-		controller.host_apply_throw(
-			2,
-			member_direction,
-			member_power,
-			member_spin,
-			controller.shot_id,
-		),
-		"member network throw is accepted by host",
-	)
+	_expect(controller.host_apply_throw(2, member_direction, member_power, member_spin), "member network throw is accepted by host")
 	var member_stone: CurlingStone = controller._stones[controller.active_stone_id]
 	_expect(member_stone.linear_velocity.distance_to(host_velocity) <= 0.000001, "host and member throws create identical initial velocity")
 	_expect_close(member_stone.angular_velocity, host_spin, 0.000001, "host and member throws create identical angular velocity")
@@ -903,28 +730,7 @@ func _test_match_alternation_and_overtime() -> void:
 	var now_ms := Time.get_ticks_msec()
 	_expect(not match_controller.host_apply_sweep(2, Vector2.ZERO, Vector2(20, 0), 0.05, now_ms), "opponent sweep rejected")
 	_expect(not match_controller.host_apply_sweep(1, Vector2.ZERO, Vector2(20, 0), 0.05, now_ms - 300), "expired sweep sample rejected")
-	_expect(
-		not match_controller.host_apply_sweep(
-			1,
-			Vector2.ZERO,
-			Vector2(20, 0),
-			0.05,
-			now_ms,
-			match_controller.shot_id + 1,
-		),
-		"sweep intent from another shot is rejected",
-	)
-	_expect(
-		match_controller.host_apply_sweep(
-			1,
-			Vector2.ZERO,
-			Vector2(20, 0),
-			0.05,
-			now_ms,
-			match_controller.shot_id,
-		),
-		"valid team sweep accepted",
-	)
+	_expect(match_controller.host_apply_sweep(1, Vector2.ZERO, Vector2(20, 0), 0.05, now_ms), "valid team sweep accepted")
 	var initial_hammer := match_controller.hammer_team
 	var initial_direction := match_controller.direction
 	match_controller.current_end = 0

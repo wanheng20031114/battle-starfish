@@ -39,6 +39,7 @@ SETTINGS_RUNTIME_ICONS = {
 RUNTIME_FRAMES = {
     "button_sandstone",
     "button_aqua",
+    "section_aqua",
 }
 
 

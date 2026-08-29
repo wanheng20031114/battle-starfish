@@ -49,22 +49,12 @@ func _process(_delta: float) -> void:
 	if _delayed_packets.is_empty():
 		return
 	var now_ms := Time.get_ticks_msec()
-	for queued in pop_due_packets_in_order(_delayed_packets, now_ms):
-		_dispatch_packet(int(queued["channel"]), int(queued["target"]), queued["payload"])
-
-
-static func pop_due_packets_in_order(
-	delayed_packets: Array[Dictionary],
-	now_ms: int,
-) -> Array[Dictionary]:
-	var due_packets: Array[Dictionary] = []
-	# 固定延迟下入队时间单调递增；从队首取出可保持可靠通道原本的发送顺序。
-	while not delayed_packets.is_empty():
-		var queued: Dictionary = delayed_packets.front()
+	for index in range(_delayed_packets.size() - 1, -1, -1):
+		var queued: Dictionary = _delayed_packets[index]
 		if int(queued.get("deliver_ms", now_ms + 1)) > now_ms:
-			break
-		due_packets.append(delayed_packets.pop_front())
-	return due_packets
+			continue
+		_delayed_packets.remove_at(index)
+		_dispatch_packet(int(queued["channel"]), int(queued["target"]), queued["payload"])
 
 
 func host_lan(port: int = CurlingConstants.LAN_GAME_PORT) -> Error:
